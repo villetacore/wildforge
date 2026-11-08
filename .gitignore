@@ -1,0 +1,10 @@
+# Go server
+server/data/
+server/wildforge-server
+
+# Rust client
+client/rust/target/
+
+# Godot
+client/godot/.godot/
+*.import
