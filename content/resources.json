@@ -1,0 +1,22 @@
+[
+  {
+    "id": "crystal", "name": "Crystal Cluster", "item": "crystal", "tool": "pickaxe", "min_tier": 2,
+    "charges": 2, "respawn": 180, "model": "crystal", "texture": "crystal", "color": "#7fe3ff",
+    "min_distance": 0.55, "spawn": [ { "terrain": "rocky", "chance": 0.05 } ]
+  },
+  {
+    "id": "iron", "name": "Iron Vein", "item": "iron_ore", "tool": "pickaxe", "min_tier": 1,
+    "charges": 3, "respawn": 120, "model": "ore", "texture": "iron_ore", "color": "#c8703a",
+    "min_distance": 0.25, "spawn": [ { "terrain": "rocky", "chance": 0.09 } ]
+  },
+  {
+    "id": "rock", "name": "Rock", "item": "stone", "tool": "pickaxe", "min_tier": 1,
+    "charges": 3, "respawn": 90, "model": "rock", "texture": "stone", "color": "#9a9a9a",
+    "min_distance": 0.0, "spawn": [ { "terrain": "rocky", "chance": 0.3 }, { "terrain": "grass", "chance": 0.006 } ]
+  },
+  {
+    "id": "tree", "name": "Tree", "item": "wood", "tool": "axe", "min_tier": 0,
+    "charges": 4, "respawn": 60, "model": "tree", "texture": "bark", "color": "#2f6b2a",
+    "min_distance": 0.0, "spawn": [ { "terrain": "forest", "chance": 0.4 }, { "terrain": "grass", "chance": 0.025 } ]
+  }
+]

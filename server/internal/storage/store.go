@@ -1,4 +1,6 @@
-package main
+// Package storage keeps player accounts and their saved characters in a JSON
+// file. Characters are opaque JSON so the game package owns their schema.
+package storage
 
 import (
 	"crypto/pbkdf2"
@@ -20,23 +22,21 @@ var (
 	ErrBadLogin   = errors.New("invalid username or password")
 )
 
-// User is a registered account together with its saved character.
 type User struct {
-	Name      string     `json:"name"`
-	Salt      string     `json:"salt"`
-	Hash      string     `json:"hash"`
-	CreatedAt time.Time  `json:"created_at"`
-	Character *Character `json:"character,omitempty"`
+	Name      string          `json:"name"`
+	Salt      string          `json:"salt"`
+	Hash      string          `json:"hash"`
+	CreatedAt time.Time       `json:"created_at"`
+	Character json.RawMessage `json:"character,omitempty"`
 }
 
-// Store keeps accounts in memory and persists them to a JSON file.
 type Store struct {
 	mu    sync.Mutex
 	path  string
 	users map[string]*User
 }
 
-func OpenStore(path string) (*Store, error) {
+func Open(path string) (*Store, error) {
 	s := &Store{path: path, users: map[string]*User{}}
 	data, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
@@ -45,10 +45,7 @@ func OpenStore(path string) (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := json.Unmarshal(data, &s.users); err != nil {
-		return nil, err
-	}
-	return s, nil
+	return s, json.Unmarshal(data, &s.users)
 }
 
 func hashPassword(password string, salt []byte) []byte {
@@ -78,34 +75,27 @@ func (s *Store) Register(name, password string) error {
 	if _, err := rand.Read(salt); err != nil {
 		return err
 	}
-	hash := hashPassword(password, salt) // outside the lock: it is slow on purpose
+	hash := hashPassword(password, salt) // slow on purpose: do it outside the lock
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if _, ok := s.users[name]; ok {
 		return ErrUserExists
 	}
-	s.users[name] = &User{
-		Name:      name,
-		Salt:      hex.EncodeToString(salt),
-		Hash:      hex.EncodeToString(hash),
-		CreatedAt: time.Now().UTC(),
-	}
+	s.users[name] = &User{Name: name, Salt: hex.EncodeToString(salt), Hash: hex.EncodeToString(hash), CreatedAt: time.Now().UTC()}
 	return s.saveLocked()
 }
 
-// Authenticate checks the password and returns a copy of the saved character
-// (nil for a brand new account).
-func (s *Store) Authenticate(name, password string) (*Character, error) {
+// Authenticate checks the password and returns the saved character JSON
+// (nil for a new account).
+func (s *Store) Authenticate(name, password string) (json.RawMessage, error) {
 	s.mu.Lock()
 	u, ok := s.users[name]
 	var salt, want []byte
-	var ch *Character
+	var ch json.RawMessage
 	if ok {
 		salt, _ = hex.DecodeString(u.Salt)
 		want, _ = hex.DecodeString(u.Hash)
-		if u.Character != nil {
-			ch = u.Character.Clone()
-		}
+		ch = slices.Clone(u.Character)
 	}
 	s.mu.Unlock()
 	if !ok {
@@ -118,14 +108,14 @@ func (s *Store) Authenticate(name, password string) (*Character, error) {
 	return ch, nil
 }
 
-func (s *Store) SaveCharacter(name string, ch *Character) error {
+func (s *Store) SaveCharacter(name string, character json.RawMessage) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	u, ok := s.users[name]
 	if !ok {
 		return errors.New("unknown user " + name)
 	}
-	u.Character = ch
+	u.Character = character
 	return s.saveLocked()
 }
 
@@ -136,15 +126,13 @@ type LeaderboardEntry struct {
 	Kills int    `json:"kills"`
 }
 
-// Leaderboard returns the top players by level and xp.
 func (s *Store) Leaderboard(limit int) []LeaderboardEntry {
 	s.mu.Lock()
 	out := make([]LeaderboardEntry, 0, len(s.users))
 	for _, u := range s.users {
 		e := LeaderboardEntry{Name: u.Name, Level: 1}
-		if c := u.Character; c != nil {
-			e.Level, e.XP, e.Kills = c.Level, c.XP, c.Kills
-		}
+		_ = json.Unmarshal(u.Character, &e)
+		e.Name = u.Name
 		out = append(out, e)
 	}
 	s.mu.Unlock()

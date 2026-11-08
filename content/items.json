@@ -1,0 +1,29 @@
+[
+  { "id": "wood",       "name": "Wood",        "type": "material", "stack": 99, "color": "#9c6b3c", "desc": "Chopped from trees" },
+  { "id": "stone",      "name": "Stone",       "type": "material", "stack": 99, "color": "#9a9a9a", "desc": "Mined from rocks" },
+  { "id": "iron_ore",   "name": "Iron Ore",    "type": "material", "stack": 99, "color": "#c8703a", "desc": "Mined from iron veins" },
+  { "id": "crystal",    "name": "Crystal",     "type": "material", "stack": 99, "color": "#7fe3ff", "desc": "Rare crystal from the far mountains" },
+  { "id": "slime_gel",  "name": "Slime Gel",   "type": "material", "stack": 99, "color": "#7be35a", "desc": "Dropped by slimes" },
+  { "id": "hide",       "name": "Hide",        "type": "material", "stack": 99, "color": "#a07850", "desc": "Dropped by wolves and ogres" },
+  { "id": "bone",       "name": "Bone",        "type": "material", "stack": 99, "color": "#e8e2cc", "desc": "Dropped by skeletons" },
+
+  { "id": "potion",     "name": "Health Potion", "type": "potion", "stack": 20, "heal": 0.35, "color": "#e0303a", "desc": "Restores 35% HP" },
+  { "id": "big_potion", "name": "Great Potion",  "type": "potion", "stack": 20, "heal": 0.8,  "color": "#ff60c0", "desc": "Restores 80% HP" },
+
+  { "id": "wood_sword",    "name": "Wooden Sword",  "type": "weapon", "attack": 3,  "color": "#b08050", "desc": "+3 attack" },
+  { "id": "stone_sword",   "name": "Stone Sword",   "type": "weapon", "attack": 6,  "color": "#a0a0a0", "desc": "+6 attack" },
+  { "id": "iron_sword",    "name": "Iron Sword",    "type": "weapon", "attack": 11, "color": "#d0d4dc", "desc": "+11 attack" },
+  { "id": "crystal_blade", "name": "Crystal Blade", "type": "weapon", "attack": 18, "color": "#7fe3ff", "desc": "+18 attack" },
+  { "id": "fire_blade",    "name": "Fire Blade",    "type": "weapon", "attack": 26, "color": "#ff7030", "desc": "+26 attack. Only ogres carry these" },
+
+  { "id": "leather_armor", "name": "Leather Armor", "type": "armor", "defense": 2,  "color": "#8a5a30", "desc": "+2 defense" },
+  { "id": "bone_armor",    "name": "Bone Armor",    "type": "armor", "defense": 4,  "color": "#e8e2cc", "desc": "+4 defense" },
+  { "id": "iron_armor",    "name": "Iron Armor",    "type": "armor", "defense": 7,  "color": "#b8bcc4", "desc": "+7 defense" },
+  { "id": "crystal_armor", "name": "Crystal Armor", "type": "armor", "defense": 11, "color": "#7fe3ff", "desc": "+11 defense" },
+  { "id": "dragon_mail",   "name": "Dragon Mail",   "type": "armor", "defense": 15, "color": "#c03030", "desc": "+15 defense. Legendary ogre loot" },
+
+  { "id": "wood_pickaxe", "name": "Wooden Pickaxe", "type": "tool", "tool": "pickaxe", "tier": 1, "color": "#b08050", "desc": "Mines stone and iron" },
+  { "id": "stone_axe",    "name": "Stone Axe",      "type": "tool", "tool": "axe",     "tier": 1, "color": "#a0a0a0", "desc": "Chops 2 wood per swing" },
+  { "id": "iron_pickaxe", "name": "Iron Pickaxe",   "type": "tool", "tool": "pickaxe", "tier": 2, "color": "#d0d4dc", "desc": "Mines crystal, more ore per swing" },
+  { "id": "iron_axe",     "name": "Iron Axe",       "type": "tool", "tool": "axe",     "tier": 2, "color": "#d0d4dc", "desc": "Chops 3 wood per swing" }
+]

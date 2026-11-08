@@ -1,0 +1,10 @@
+{
+  "size": 256,
+  "town_radius": 10,
+  "spawn_safe_radius": 14,
+  "enemy_count": 300,
+  "enemy_respawn": 20,
+  "max_inventory": 24,
+  "gold_per_level": [1, 4],
+  "start_inventory": [ { "item": "potion", "qty": 3 } ]
+}
