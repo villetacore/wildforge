@@ -3,6 +3,7 @@
 package protocol
 
 import "github.com/villetacore/wildforge/server/internal/content"
+import "github.com/villetacore/wildforge/server/internal/world"
 
 // ---- client -> server
 
@@ -42,14 +43,16 @@ type Registered struct {
 // Welcome is sent once after login. Terrain and Nodes are strings with one
 // character per tile ('0' + code), row-major, Size x Size.
 type Welcome struct {
-	T        string        `json:"t"` // "welcome"
-	ID       int64         `json:"id"`
-	Name     string        `json:"name"`
-	Size     int           `json:"size"`
-	Terrain  string        `json:"terrain"`
-	Nodes    string        `json:"nodes"`
-	Depleted []int         `json:"depleted"`
-	Content  *content.Pack `json:"content"`
+	Heights  []float64          `json:"heights"`
+	Portals  []world.PortalLink `json:"portals"`
+	T        string             `json:"t"` // "welcome"
+	ID       int64              `json:"id"`
+	Name     string             `json:"name"`
+	Size     int                `json:"size"`
+	Terrain  string             `json:"terrain"`
+	Nodes    string             `json:"nodes"`
+	Depleted []int              `json:"depleted"`
+	Content  *content.Pack      `json:"content"`
 }
 
 type Chat struct {

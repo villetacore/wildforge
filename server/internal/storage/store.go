@@ -45,7 +45,18 @@ func Open(path string) (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
-	return s, json.Unmarshal(data, &s.users)
+	if err := json.Unmarshal(data, &s.users); err != nil {
+		return nil, err
+	}
+	if s.users == nil {
+		return nil, errors.New("expected an account table")
+	}
+	for name, user := range s.users {
+		if user == nil {
+			return nil, errors.New("empty account record for " + name)
+		}
+	}
+	return s, nil
 }
 
 func hashPassword(password string, salt []byte) []byte {
@@ -62,12 +73,22 @@ func (s *Store) saveLocked() error {
 	if err != nil {
 		return err
 	}
-	_ = os.MkdirAll(filepath.Dir(s.path), 0o755)
-	tmp := s.path + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o600); err != nil {
+	if err := os.MkdirAll(filepath.Dir(s.path), 0o755); err != nil {
 		return err
 	}
-	return os.Rename(tmp, s.path)
+	tmp, err := os.CreateTemp(filepath.Dir(s.path), ".wildforge-*.tmp")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(tmp.Name())
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmp.Name(), s.path)
 }
 
 func (s *Store) Register(name, password string) error {
@@ -82,7 +103,11 @@ func (s *Store) Register(name, password string) error {
 		return ErrUserExists
 	}
 	s.users[name] = &User{Name: name, Salt: hex.EncodeToString(salt), Hash: hex.EncodeToString(hash), CreatedAt: time.Now().UTC()}
-	return s.saveLocked()
+	if err := s.saveLocked(); err != nil {
+		delete(s.users, name)
+		return err
+	}
+	return nil
 }
 
 // Authenticate checks the password and returns the saved character JSON
@@ -115,8 +140,13 @@ func (s *Store) SaveCharacter(name string, character json.RawMessage) error {
 	if !ok {
 		return errors.New("unknown user " + name)
 	}
-	u.Character = character
-	return s.saveLocked()
+	previous := u.Character
+	u.Character = slices.Clone(character)
+	if err := s.saveLocked(); err != nil {
+		u.Character = previous
+		return err
+	}
+	return nil
 }
 
 type LeaderboardEntry struct {

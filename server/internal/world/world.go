@@ -25,6 +25,8 @@ var terrainNames = map[string]Terrain{
 }
 
 type World struct {
+	Heights []float64
+	Portals []PortalLink
 	Size    int
 	Terrain []Terrain
 	Nodes   []uint8 // resource kind per tile, 1-based index into content resources, 0 = none
@@ -101,6 +103,8 @@ func Generate(seed uint32, pack *content.Pack) *World {
 		}
 	}
 	w.SpawnX, w.SpawnY = c+0.5, c+0.5
+	w.generateDungeons(seed)
+	w.generateHeights(seed)
 	return w
 }
 
@@ -114,7 +118,7 @@ func (w *World) Blocked(x, y int) bool {
 		return true
 	}
 	i := w.Index(x, y)
-	return w.Terrain[i] == Water || (w.Nodes[i] != 0 && w.Charges[i] > 0)
+	return (w.Terrain[i] == Water || w.Terrain[i] == Wall) || (w.Nodes[i] != 0 && w.Charges[i] > 0)
 }
 
 // Free reports whether a circle of radius 0.3 at (x, y) fits on walkable tiles.

@@ -3,9 +3,7 @@
 
 use godot::classes::base_material_3d::CullMode;
 use godot::classes::mesh::PrimitiveType;
-use godot::classes::{
-    Material, MeshInstance3D, Node3D, PlaneMesh, StandardMaterial3D, SurfaceTool,
-};
+use godot::classes::{Material, MeshInstance3D, Node3D, StandardMaterial3D, SurfaceTool};
 use godot::prelude::*;
 
 use crate::content::ContentLibrary;
@@ -15,7 +13,9 @@ const CHUNK: usize = 32;
 const COAST_DEPTH: f32 = 0.35;
 
 /// Texture used for each terrain code sent by the server.
-pub const TERRAIN_TEXTURES: [&str; 6] = ["grass", "water", "sand", "forest", "road", "rocky"];
+pub const TERRAIN_TEXTURES: [&str; 10] = [
+    "grass", "water", "sand", "forest", "road", "rocky", "stone", "road", "road", "road",
+];
 
 /// Minimap colors per terrain code.
 pub fn terrain_color(code: u8) -> Color {
@@ -26,6 +26,10 @@ pub fn terrain_color(code: u8) -> Color {
         3 => Color::from_rgb(0.22, 0.42, 0.20),
         4 => Color::from_rgb(0.62, 0.52, 0.36),
         5 => Color::from_rgb(0.48, 0.46, 0.42),
+        6 => Color::from_rgb(0.12, 0.12, 0.14),
+        7 => Color::from_rgb(0.35, 0.32, 0.29),
+        8 => Color::from_rgb(0.3, 0.8, 0.9),
+        9 => Color::from_rgb(0.7, 0.5, 0.2),
         _ => Color::MAGENTA,
     }
 }
@@ -73,7 +77,7 @@ impl Terrain {
             for cx in (0..size).step_by(CHUNK) {
                 for (code, mat) in mats.iter().enumerate() {
                     let code = code as u8;
-                    if code == WATER {
+                    if code == WATER || code == 6 {
                         continue;
                     }
                     let mut st = SurfaceTool::new_gd();
@@ -91,7 +95,11 @@ impl Terrain {
                                 st.set_color(Color::from_rgb(s, s, s));
                                 st.set_normal(Vector3::UP);
                                 st.set_uv(Vector2::new(vx as f32 * 0.5, vy as f32 * 0.5));
-                                st.add_vertex(Vector3::new(vx as f32, 0.0, vy as f32));
+                                st.add_vertex(Vector3::new(
+                                    vx as f32,
+                                    height(vx as f32, vy as f32),
+                                    vy as f32,
+                                ));
                             };
                             for (vx, vy) in [
                                 (x, y),
@@ -156,6 +164,7 @@ impl Terrain {
                     if quads == 0 {
                         continue;
                     }
+                    st.generate_normals();
                     if let Some(mesh) = st.commit() {
                         let mut mi = MeshInstance3D::new_alloc();
                         mi.set_mesh(&mesh);
@@ -166,23 +175,31 @@ impl Terrain {
             }
         }
 
-        // Ocean: one big plane under the island, also visible in lakes.
-        let span = size as f32 * 4.0;
-        let mut plane = PlaneMesh::new_gd();
-        plane.set_size(Vector2::new(span, span));
         let mut water = lib
-            .material("water", Color::from_rgb(0.85, 0.95, 1.0), span / 3.0, false)
+            .material("water", Color::from_rgb(0.50, 0.58, 0.62), 1.0, false)
             .duplicate_resource();
-        water.set_roughness(0.15);
-        water.set_metallic(0.1);
-        let mut ocean = MeshInstance3D::new_alloc();
-        ocean.set_mesh(&plane);
-        ocean.set_material_override(&water.clone().upcast::<Material>());
-        ocean.set_position(Vector3::new(size as f32 / 2.0, -0.28, size as f32 / 2.0));
-        ocean.set_cast_shadows_setting(
-            godot::classes::geometry_instance_3d::ShadowCastingSetting::OFF,
-        );
-        root.add_child(&ocean);
+        water.set_roughness(0.65);
+        let mut ocean_mesh = SurfaceTool::new_gd();
+        ocean_mesh.begin(PrimitiveType::TRIANGLES);
+        for y in 0..size {
+            for x in 0..size {
+                if codes[y * size + x] != WATER {
+                    continue;
+                }
+                for (dx, dy) in [(0, 0), (1, 1), (1, 0), (0, 0), (0, 1), (1, 1)] {
+                    ocean_mesh.set_normal(Vector3::UP);
+                    ocean_mesh.set_uv(Vector2::new((x + dx) as f32 / 3.0, (y + dy) as f32 / 3.0));
+                    ocean_mesh.add_vertex(Vector3::new((x + dx) as f32, -0.28, (y + dy) as f32));
+                }
+            }
+        }
+        if let Some(mesh) = ocean_mesh.commit() {
+            let mut ocean = MeshInstance3D::new_alloc();
+            ocean.set_mesh(&mesh);
+            ocean.set_material_override(&water);
+            root.add_child(&ocean);
+        }
+        super::structures::build(&mut root, size, codes, lib);
 
         parent.add_child(&root);
         Terrain { water, t: 0.0 }
@@ -194,4 +211,39 @@ impl Terrain {
         let o = self.t * 0.02;
         self.water.set_uv1_offset(Vector3::new(o, o * 0.6, 0.0));
     }
+}
+
+// Height data belongs to the currently displayed world on Godot's main thread.
+// Shared sampling keeps entities, resources, effects and mesh vertices aligned.
+thread_local! {
+    static HEIGHTS: std::cell::RefCell<(usize, Vec<f32>)> = const { std::cell::RefCell::new((0, Vec::new())) };
+}
+
+pub fn set_heights(size: usize, values: &[f32]) {
+    HEIGHTS.with(|h| *h.borrow_mut() = (size, values.to_vec()));
+}
+
+pub fn height(x: f32, y: f32) -> f32 {
+    HEIGHTS.with(|h| {
+        let h = h.borrow();
+        let n = h.0;
+        if n == 0 || h.1.len() != (n + 1) * (n + 1) {
+            return 0.0;
+        }
+        let x = x.clamp(0.0, n as f32 - 0.001);
+        let y = y.clamp(0.0, n as f32 - 0.001);
+        let ix = x.floor() as usize;
+        let iy = y.floor() as usize;
+        let u = x - ix as f32;
+        let v = y - iy as f32;
+        let a = h.1[iy * (n + 1) + ix];
+        let b = h.1[iy * (n + 1) + ix + 1];
+        let c = h.1[(iy + 1) * (n + 1) + ix + 1];
+        let d = h.1[(iy + 1) * (n + 1) + ix];
+        if u >= v {
+            a + u * (b - a) + v * (c - b)
+        } else {
+            a + u * (c - d) + v * (d - a)
+        }
+    })
 }

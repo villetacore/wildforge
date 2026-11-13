@@ -31,7 +31,7 @@ void fragment() {
 "#;
 
 pub fn to_world(x: f32, y: f32) -> Vector3 {
-    Vector3::new(x, 0.0, y)
+    Vector3::new(x, super::terrain::height(x, y), y)
 }
 
 struct Actor {
@@ -72,7 +72,11 @@ impl Actor {
     fn update(&mut self, delta: f32) {
         let a = 1.0 - (-delta * 14.0).exp();
         let before = self.pos;
+        if self.pos.distance_to(self.target) > 20.0 {
+            self.pos = self.target;
+        }
         self.pos = self.pos.lerp(self.target, a);
+        self.pos.y = super::terrain::height(self.pos.x, self.pos.z);
         let moved = self.pos - before;
         let speed = moved.length() / delta.max(1e-4);
         if moved.length() > 0.002 {
@@ -97,6 +101,10 @@ impl Actor {
         } else {
             ((self.walk).sin().abs() * 0.06, 1.0)
         };
+        for (i, leg) in self.model.legs.iter_mut().enumerate() {
+            let phase = if i == 0 || i == 3 { 1.0 } else { -1.0 };
+            leg.set_rotation(Vector3::new(self.walk.sin() * 0.45 * phase, 0.0, 0.0));
+        }
         let root = &mut self.model.root;
         root.set_position(self.pos + Vector3::new(0.0, bob, 0.0));
         root.set_rotation(Vector3::new(0.0, self.yaw, 0.0));

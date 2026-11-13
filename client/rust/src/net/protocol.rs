@@ -198,6 +198,8 @@ pub enum ServerMsg {
         name: String,
         size: usize,
         terrain: String,
+        #[serde(default)]
+        heights: Vec<f32>,
         nodes: String,
         depleted: Vec<usize>,
         content: ContentDefs,

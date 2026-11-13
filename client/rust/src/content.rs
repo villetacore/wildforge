@@ -97,7 +97,14 @@ impl ContentLibrary {
         }
         let mut m = StandardMaterial3D::new_gd();
         m.set_albedo(tint);
-        m.set_roughness(0.9);
+        m.set_roughness(match texture {
+            "metal" => 0.65,
+            "slime" | "crystal" => 0.22,
+            _ => 0.9,
+        });
+        if texture == "metal" {
+            m.set_metallic(0.25);
+        }
         if let Some(tex) = self.texture(texture) {
             m.set_texture(TextureParam::ALBEDO, &tex);
         }

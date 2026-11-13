@@ -1,10 +1,9 @@
-//! Follow camera looking down at the player from a fixed angle, with zoom.
+//! Follow camera with a low third-person view that rises as the player zooms out.
 
 use godot::classes::{Camera3D, Node3D};
 use godot::prelude::*;
 
-const PITCH: f32 = 0.95; // radians above the horizon
-const MIN_DIST: f32 = 7.0;
+const MIN_DIST: f32 = 4.5;
 const MAX_DIST: f32 = 32.0;
 
 pub struct CameraRig {
@@ -18,15 +17,15 @@ pub struct CameraRig {
 impl CameraRig {
     pub fn new(parent: &mut Gd<Node3D>) -> CameraRig {
         let mut cam = Camera3D::new_alloc();
-        cam.set_fov(50.0);
+        cam.set_fov(58.0);
         cam.set_far(220.0);
         parent.add_child(&cam);
         cam.make_current();
         CameraRig {
             cam,
             focus: Vector3::ZERO,
-            distance: 16.0,
-            target_distance: 16.0,
+            distance: 8.5,
+            target_distance: 8.5,
             snapped: false,
         }
     }
@@ -37,14 +36,26 @@ impl CameraRig {
     }
 
     pub fn update(&mut self, delta: f32, target: Vector3) {
-        if !self.snapped {
+        if !self.snapped || self.focus.distance_to(target) > 20.0 {
             self.focus = target;
             self.snapped = true;
         }
         self.focus = self.focus.lerp(target, 1.0 - (-delta * 8.0).exp());
         self.distance += (self.target_distance - self.distance) * (1.0 - (-delta * 10.0).exp());
-        let look = self.focus + Vector3::new(0.0, 0.8, 0.0);
-        let offset = Vector3::new(0.0, PITCH.sin(), PITCH.cos()) * self.distance;
+        let look = self.focus + Vector3::new(0.0, 1.4, 0.0);
+        let zoom = (self.distance - MIN_DIST) / (MAX_DIST - MIN_DIST);
+        let underground = target.y < -5.0;
+        let pitch = if underground {
+            0.95
+        } else {
+            0.26 + 0.65 * zoom
+        };
+        let view_distance = if underground {
+            self.distance.min(4.5)
+        } else {
+            self.distance
+        };
+        let offset = Vector3::new(0.0, pitch.sin(), pitch.cos()) * view_distance;
         self.cam.look_at_from_position(look + offset, look);
     }
 }

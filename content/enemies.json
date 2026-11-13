@@ -16,7 +16,7 @@
                { "item": "big_potion", "chance": 0.08, "min": 1, "max": 1 } ]
   },
   {
-    "id": "ogre", "name": "Ogre", "model": "humanoid", "texture": "skin", "color": "#94608a", "scale": 1.6,
+    "id": "ogre", "name": "Ogre", "model": "humanoid", "texture": "ogre_skin", "color": "#94608a", "scale": 1.6,
     "hp": 110, "hp_per_level": 22, "damage": 12, "damage_per_level": 3.0, "speed": 2.1, "xp": 45, "min_level": 10,
     "drops": [ { "item": "hide", "chance": 0.8, "min": 2, "max": 4 }, { "item": "crystal", "chance": 0.3, "min": 1, "max": 2 },
                { "item": "fire_blade", "chance": 0.03, "min": 1, "max": 1 }, { "item": "dragon_mail", "chance": 0.02, "min": 1, "max": 1 } ]

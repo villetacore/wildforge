@@ -15,6 +15,7 @@ pub struct Session {
     pub catalog: Catalog,
     pub size: usize,
     pub terrain: Vec<u8>,
+    pub heights: Vec<f32>,
     pub nodes: Vec<u8>,
     pub you: You,
 }
@@ -38,6 +39,7 @@ impl Session {
             catalog,
             size,
             terrain: decode(terrain),
+            heights: Vec::new(),
             nodes: decode(nodes),
             you: You::default(),
         }

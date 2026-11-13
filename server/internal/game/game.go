@@ -60,9 +60,11 @@ type GroundItem struct {
 }
 
 type Game struct {
-	pack  *content.Pack
-	world *world.World
-	saver Saver
+	chestTimers map[int]float64
+	guardTimers map[*Enemy]float64
+	pack        *content.Pack
+	world       *world.World
+	saver       Saver
 
 	terrainEnc string
 	nodesEnc   string
@@ -80,7 +82,7 @@ type Game struct {
 
 func New(pack *content.Pack, w *world.World, saver Saver) *Game {
 	g := &Game{
-		pack: pack, world: w, saver: saver,
+		pack: pack, world: w, saver: saver, chestTimers: map[int]float64{}, guardTimers: map[*Enemy]float64{},
 		terrainEnc: w.EncodeTerrain(), nodesEnc: w.EncodeNodes(),
 		players: map[int64]*Player{}, enemies: map[int64]*Enemy{}, items: map[int64]*GroundItem{},
 		nodeTimers: map[int]float64{}, saveT: saveInterval, events: make(chan event, 1024),
@@ -88,6 +90,7 @@ func New(pack *content.Pack, w *world.World, saver Saver) *Game {
 	for range pack.World.EnemyCount {
 		g.spawnEnemy()
 	}
+	g.spawnDungeonGuards()
 	return g
 }
 
@@ -183,6 +186,13 @@ func (g *Game) save(p *Player, async bool) {
 // ---- tick
 
 func (g *Game) tick() {
+	for i, t := range g.chestTimers {
+		if t <= dt {
+			delete(g.chestTimers, i)
+		} else {
+			g.chestTimers[i] = t - dt
+		}
+	}
 	g.tickPlayers()
 	g.tickEnemies()
 	g.tickGroundItems()
@@ -199,6 +209,27 @@ func (g *Game) tick() {
 }
 
 func (g *Game) tickRespawns() {
+	for e, t := range g.guardTimers {
+		if t > dt {
+			g.guardTimers[e] = t - dt
+			continue
+		}
+		nearby := false
+		for _, p := range g.players {
+			if dist(p.Ch.X, p.Ch.Y, e.HomeX, e.HomeY) < 5 {
+				nearby = true
+			}
+		}
+		if nearby {
+			g.guardTimers[e] = 5
+			continue
+		}
+		e.X, e.Y, e.HP, e.Target = e.HomeX, e.HomeY, e.MaxHP, 0
+		e.AttackCD = 0
+		g.enemies[g.newID()] = e
+		delete(g.guardTimers, e)
+	}
+
 	ready := 0
 	kept := g.enemyTimers[:0]
 	for _, t := range g.enemyTimers {

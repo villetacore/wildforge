@@ -8,3 +8,21 @@ client/rust/target/
 # Godot
 client/godot/.godot/
 *.import
+
+# Local machine and editor state
+.DS_Store
+._*
+.idea/
+.vscode/
+.codex/
+.agents/
+.env
+.env.*
+!.env.example
+*.log
+*.tmp
+*.swp
+*.swo
+*~
+/tmp/
+/output/

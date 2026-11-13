@@ -8,6 +8,7 @@ import (
 )
 
 type Enemy struct {
+	Dungeon      bool
 	Def          *content.Enemy
 	Level        int
 	HP, MaxHP    float64
@@ -29,7 +30,7 @@ outer:
 	for range 200 {
 		x, y := randRange(2, size-2), randRange(2, size-2)
 		d := dist(x, y, w.SpawnX, w.SpawnY)
-		if d < safe || !w.Free(x, y) {
+		if d < safe || w.Underground(x, y) || !w.Free(x, y) {
 			continue
 		}
 		for _, p := range g.players {
@@ -69,7 +70,7 @@ func (g *Game) tickEnemies() {
 		if e.Target == 0 {
 			best := aggroRange
 			for id, p := range g.players {
-				if d := dist(p.Ch.X, p.Ch.Y, e.X, e.Y); d < best {
+				if d := dist(p.Ch.X, p.Ch.Y, e.X, e.Y); d < best && g.world.ClearLine(p.Ch.X, p.Ch.Y, e.X, e.Y) {
 					best, e.Target = d, id
 				}
 			}
@@ -81,7 +82,7 @@ func (g *Game) tickEnemies() {
 			if d > reach {
 				s := e.Def.Speed * dt / d
 				e.X, e.Y = g.world.Step(e.X, e.Y, (t.Ch.X-e.X)*s, (t.Ch.Y-e.Y)*s)
-			} else if e.AttackCD <= 0 {
+			} else if e.AttackCD <= 0 && g.world.ClearLine(e.X, e.Y, t.Ch.X, t.Ch.Y) {
 				e.AttackCD = 1
 				g.enemyHit(t, e.Def.Damage+e.Def.DamagePerLevel*float64(e.Level-1))
 			}

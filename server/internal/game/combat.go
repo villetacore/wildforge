@@ -18,6 +18,9 @@ func (g *Game) playerAttack(p *Player) {
 	var targetID int64
 	best := attackRange
 	for id, e := range g.enemies {
+		if !g.world.ClearLine(p.Ch.X, p.Ch.Y, e.X, e.Y) {
+			continue
+		}
 		if d := dist(p.Ch.X, p.Ch.Y, e.X, e.Y) - 0.3*(e.Def.Scale-1); d <= best {
 			best, targetID = d, id
 		}
@@ -37,7 +40,11 @@ func (g *Game) playerAttack(p *Player) {
 	g.addFx("hit", e.X, e.Y, text)
 	if e.HP <= 0 {
 		delete(g.enemies, targetID)
-		g.enemyTimers = append(g.enemyTimers, g.pack.World.EnemyRespawn)
+		if e.Dungeon {
+			g.guardTimers[e] = g.pack.World.EnemyRespawn
+		} else {
+			g.enemyTimers = append(g.enemyTimers, g.pack.World.EnemyRespawn)
+		}
 		g.onEnemyKilled(p, e)
 	}
 }

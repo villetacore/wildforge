@@ -74,7 +74,8 @@ impl ResourceField {
                     let jitter = Vector3::new(rand01(i, 1) - 0.5, 0.0, rand01(i, 2) - 0.5) * 0.3;
                     let s = 0.8 + rand01(i, 3) * 0.5;
                     models::trs(
-                        Vector3::new(x, 0.0, y) + jitter,
+                        Vector3::new(x, super::terrain::height(x + jitter.x, y + jitter.z), y)
+                            + jitter,
                         rand01(i, 4) * std::f32::consts::TAU,
                         Vector3::splat(s),
                     )

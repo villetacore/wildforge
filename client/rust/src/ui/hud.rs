@@ -3,8 +3,8 @@
 use godot::classes::control::{FocusMode, MouseFilter, SizeFlags};
 use godot::classes::texture_rect::ExpandMode;
 use godot::classes::{
-    CanvasLayer, ColorRect, Control, ImageTexture, ItemList, Label, LineEdit, ProgressBar,
-    RichTextLabel, StyleBoxFlat, TextureRect, VBoxContainer,
+    Button, CanvasLayer, ColorRect, Control, HBoxContainer, ImageTexture, ItemList, Label,
+    LineEdit, ProgressBar, RichTextLabel, StyleBoxFlat, TextureRect, VBoxContainer,
 };
 use godot::prelude::*;
 
@@ -26,6 +26,7 @@ pub struct Hud {
     equip: Gd<Label>,
     marker: Gd<ColorRect>,
     inventory: Gd<ItemList>,
+    slots: Vec<Gd<Button>>,
     shown_inventory: Vec<Stack>,
     chat_log: Gd<RichTextLabel>,
     pub chat_input: Gd<LineEdit>,
@@ -43,7 +44,7 @@ impl Hud {
         let hp_label = label("", 13);
         let hp = bar(Color::from_rgb(0.85, 0.2, 0.2));
         let xp_label = label("", 13);
-        let xp = bar(Color::from_rgb(0.3, 0.6, 0.95));
+        let xp = bar(Color::from_rgb(0.53, 0.33, 0.84));
         let stats = label("", 13);
         let equip = label("", 13);
         let parts: [Gd<Control>; 7] = [
@@ -70,7 +71,9 @@ impl Hud {
         let mut mm_style = StyleBoxFlat::new_gd();
         mm_style.set_bg_color(Color::from_rgba(0.0, 0.0, 0.0, 0.6));
         mm_style.set_content_margin_all(6.0);
-        mm_style.set_corner_radius_all(8);
+        mm_style.set_corner_radius_all(4);
+        mm_style.set_border_width_all(2);
+        mm_style.set_border_color(Color::from_rgb(0.67, 0.49, 0.26));
         mm_panel.add_theme_stylebox_override("panel", &mm_style);
         let mut minimap = TextureRect::new_alloc();
         minimap.set_expand_mode(ExpandMode::IGNORE_SIZE);
@@ -131,9 +134,27 @@ impl Hud {
         cp.add_child(&cv);
         layer.add_child(&cp);
 
-        let mut help = label("WASD move · Space attack · E gather · C craft · Q potion · 1-9 use · wheel zoom · Enter chat", 12);
+        let mut tray = panel(Vector2::new(462.0, SCREEN_H - 90.0), Vector2::ZERO, 0.92);
+        let mut row = HBoxContainer::new_alloc();
+        let mut slots = Vec::new();
+        for i in 0..9 {
+            let mut slot = button(&(i + 1).to_string());
+            slot.set_custom_minimum_size(Vector2::new(56.0, 40.0));
+            slot.add_theme_constant_override("icon_max_width", 26);
+            slot.set_disabled(true);
+            let qc = q.clone();
+            slot.signals()
+                .pressed()
+                .connect(move || push(&qc, UiEvent::UseItem(i)));
+            row.add_child(&slot);
+            slots.push(slot);
+        }
+        tray.add_child(&row);
+        layer.add_child(&tray);
+
+        let mut help = label("WASD move · Space attack · E interact/gather · C craft · Q potion · 1-9 use · wheel zoom · Enter chat", 12);
         help.set_modulate(Color::from_rgba(1.0, 1.0, 1.0, 0.75));
-        help.set_position(Vector2::new(SCREEN_W - 640.0, SCREEN_H - 24.0));
+        help.set_position(Vector2::new(462.0, SCREEN_H - 24.0));
         help.set_mouse_filter(MouseFilter::IGNORE);
         layer.add_child(&help);
 
@@ -183,6 +204,7 @@ impl Hud {
             equip,
             marker,
             inventory,
+            slots,
             shown_inventory: Vec::new(),
             chat_log,
             chat_input,
@@ -235,6 +257,11 @@ impl Hud {
 
         if you.inventory != self.shown_inventory {
             self.inventory.clear();
+            for slot in &mut self.slots {
+                slot.set_disabled(true);
+                slot.set_button_icon(Gd::<godot::classes::Texture2D>::null_arg());
+                slot.set_tooltip_text("");
+            }
             for (i, st) in you.inventory.iter().enumerate() {
                 let def = cat.item(&st.item);
                 let name = cat.item_name(&st.item);
@@ -252,6 +279,11 @@ impl Hud {
                     .map(|d| (d.kind.as_str(), parse_color(&d.color)))
                     .unwrap_or(("material", Color::WHITE));
                 let icon = lib.icon(&st.item, kind, color);
+                if let Some(slot) = self.slots.get_mut(i) {
+                    slot.set_disabled(false);
+                    slot.set_button_icon(&icon);
+                    slot.set_tooltip_text(&text);
+                }
                 self.inventory.add_item_ex(&text).icon(&icon).done();
                 if let Some(d) = def {
                     self.inventory.set_item_tooltip(i as i32, &d.desc);

@@ -38,11 +38,11 @@ pub const SCREEN_H: f32 = 720.0;
 pub fn panel(pos: Vector2, size: Vector2, alpha: f32) -> Gd<PanelContainer> {
     let mut p = PanelContainer::new_alloc();
     let mut style = StyleBoxFlat::new_gd();
-    style.set_bg_color(Color::from_rgba(0.08, 0.09, 0.12, alpha));
-    style.set_corner_radius_all(8);
+    style.set_bg_color(Color::from_rgba(0.08, 0.065, 0.055, alpha));
+    style.set_corner_radius_all(4);
     style.set_content_margin_all(10.0);
     style.set_border_width_all(1);
-    style.set_border_color(Color::from_rgba(1.0, 1.0, 1.0, 0.08));
+    style.set_border_color(Color::from_rgba(0.73, 0.54, 0.29, 0.85));
     p.add_theme_stylebox_override("panel", &style);
     p.set_position(pos);
     p.set_size(size);
@@ -53,6 +53,9 @@ pub fn label(text: &str, size: i32) -> Gd<Label> {
     let mut l = Label::new_alloc();
     l.set_text(text);
     l.add_theme_font_size_override("font_size", size);
+    if size >= 16 {
+        l.add_theme_color_override("font_color", Color::from_rgb(0.99, 0.84, 0.52));
+    }
     l
 }
 

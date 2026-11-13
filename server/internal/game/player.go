@@ -67,9 +67,9 @@ func (g *Game) join(ev event) {
 	p := &Player{ID: ev.id, Name: ev.name, Ch: ch, SinceHit: 99, out: ev.out}
 	p.send(protocol.Welcome{
 		T: "welcome", ID: p.ID, Name: p.Name, Size: g.world.Size,
-		Terrain: g.terrainEnc, Nodes: g.nodesEnc, Depleted: g.world.Depleted(), Content: g.pack,
+		Heights: g.world.Heights, Portals: g.world.Portals, Terrain: g.terrainEnc, Nodes: g.nodesEnc, Depleted: g.world.Depleted(), Content: g.pack,
 	})
-	p.system(fmt.Sprintf("Welcome to Wildforge, %s! WASD move, Space attack, E gather, C craft, Q potion, Enter chat.", p.Name))
+	p.system(fmt.Sprintf("Welcome to Wildforge, %s! WASD move, Space attack, E interact/gather, C craft, Q potion, Enter chat.", p.Name))
 	log.Printf("%s joined", p.Name)
 	g.players[p.ID] = p
 	g.broadcastSystem(p.Name + " entered the world")
@@ -100,7 +100,9 @@ func (g *Game) input(p *Player, m protocol.ClientMsg) {
 	case "attack":
 		g.playerAttack(p)
 	case "gather":
-		g.gather(p)
+		if !g.interactDungeon(p) {
+			g.gather(p)
+		}
 	case "craft":
 		g.craft(p, m.Recipe)
 	case "chat":

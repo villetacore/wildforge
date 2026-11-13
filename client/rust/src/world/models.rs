@@ -2,7 +2,7 @@
 
 use godot::classes::{
     BoxMesh, CapsuleMesh, CylinderMesh, Material, Mesh, MeshInstance3D, Node3D, PrimitiveMesh,
-    SphereMesh, StandardMaterial3D,
+    SphereMesh, StandardMaterial3D, SurfaceTool,
 };
 use godot::prelude::*;
 
@@ -20,7 +20,44 @@ pub fn trs(pos: Vector3, yaw: f32, scale: Vector3) -> Transform3D {
 }
 
 fn finish<T: Inherits<PrimitiveMesh> + Inherits<Mesh>>(m: Gd<T>) -> Gd<Mesh> {
-    m.upcast::<Mesh>()
+    let mesh = m.upcast::<Mesh>();
+    let arrays = mesh.surface_get_arrays(0);
+    let vertices = arrays.get(0).unwrap().to::<PackedVector3Array>();
+    let uvs = arrays
+        .get(4)
+        .unwrap()
+        .try_to::<PackedVector2Array>()
+        .unwrap_or_default();
+    let indices = arrays
+        .get(12)
+        .unwrap()
+        .try_to::<PackedInt32Array>()
+        .unwrap_or_default();
+    let order: Vec<usize> = if indices.is_empty() {
+        (0..vertices.len()).collect()
+    } else {
+        indices.as_slice().iter().map(|i| *i as usize).collect()
+    };
+    let mut surface = SurfaceTool::new_gd();
+    surface.begin(godot::classes::mesh::PrimitiveType::TRIANGLES);
+    for triangle in order.chunks_exact(3) {
+        let a = vertices[triangle[0]];
+        let b = vertices[triangle[1]];
+        let c = vertices[triangle[2]];
+        let cross = (c - a).cross(b - a);
+        if cross.length_squared() < 1e-12 {
+            continue;
+        }
+        let normal = cross.normalized();
+        for &i in triangle {
+            surface.set_normal(normal);
+            if i < uvs.len() {
+                surface.set_uv(uvs[i]);
+            }
+            surface.add_vertex(vertices[i]);
+        }
+    }
+    surface.commit().map(|m| m.upcast::<Mesh>()).unwrap_or(mesh)
 }
 
 pub fn cylinder(top: f32, bottom: f32, height: f32, segments: i32) -> Gd<Mesh> {
@@ -52,8 +89,8 @@ pub fn capsule(radius: f32, height: f32) -> Gd<Mesh> {
     let mut m = CapsuleMesh::new_gd();
     m.set_radius(radius);
     m.set_height(height);
-    m.set_radial_segments(12);
-    m.set_rings(4);
+    m.set_radial_segments(6);
+    m.set_rings(2);
     finish(m)
 }
 
@@ -178,6 +215,7 @@ pub struct ActorModel {
     pub weapon_pivot: Option<Gd<Node3D>>,
     pub weapon: Option<Gd<MeshInstance3D>>,
     pub height: f32,
+    pub legs: Vec<Gd<Node3D>>,
 }
 
 pub fn humanoid(
@@ -188,44 +226,177 @@ pub fn humanoid(
     with_weapon: bool,
 ) -> ActorModel {
     let mut root = Node3D::new_alloc();
+    let skeletal = texture == "bone";
+    let cloth = lib.material(texture, color, 1.0, false);
+    let leather = lib.material("leather", Color::from_rgb(0.65, 0.65, 0.65), 1.0, false);
+    let trim = lib.material("metal", Color::from_rgb(0.72, 0.51, 0.23), 1.0, false);
+    let head_mat = lib.material(if with_weapon { "skin" } else { texture }, skin, 1.0, false);
     let body = instance(
-        &capsule(0.28, 1.0),
-        &lib.material(texture, color, 1.0, false),
-        at(Vector3::new(0.0, 0.75, 0.0)),
+        &cylinder(if skeletal { 0.13 } else { 0.31 }, 0.21, 0.55, 10),
+        &cloth,
+        trs(
+            Vector3::new(0.0, 1.02, 0.0),
+            0.0,
+            Vector3::new(1.0, 1.0, 0.7),
+        ),
     );
     root.add_child(&body);
-    let head_mat = lib.material(texture, skin, 1.0, false);
     root.add_child(&instance(
-        &sphere(0.21, 0.42, 10, 6),
+        &sphere(0.18, 0.36, 8, 4),
         &head_mat,
-        at(Vector3::new(0.0, 1.43, 0.0)),
+        trs(
+            Vector3::new(0.0, 1.53, 0.0),
+            0.0,
+            Vector3::new(0.88, 1.0, 0.9),
+        ),
     ));
-    // eyes on the front (+Z is "forward" for actors)
-    let eye = lib.material("cloth", Color::from_rgb(0.05, 0.05, 0.08), 1.0, false);
-    for x in [-0.08, 0.08] {
+    root.add_child(&instance(
+        &cylinder(0.075, 0.09, 0.14, 6),
+        &head_mat,
+        at(Vector3::new(0.0, 1.33, 0.0)),
+    ));
+    let eye = lib.material("cloth", Color::from_rgb(0.025, 0.025, 0.035), 1.0, false);
+    for x in [-0.06, 0.06] {
         root.add_child(&instance(
-            &sphere(0.035, 0.07, 6, 3),
+            &sphere(0.022, 0.032, 6, 3),
             &eye,
-            at(Vector3::new(x, 1.47, 0.18)),
+            at(Vector3::new(x, 1.55, 0.15)),
+        ));
+        root.add_child(&instance(
+            &cube(Vector3::new(0.065, 0.02, 0.035)),
+            &leather,
+            at(Vector3::new(x, 1.59, 0.15)),
         ));
     }
-    // feet
-    let feet = lib.material("cloth", color.darkened(0.5), 1.0, false);
-    for x in [-0.12, 0.12] {
+    root.add_child(&instance(
+        &sphere(0.03, 0.07, 6, 3),
+        &head_mat,
+        at(Vector3::new(0.0, 1.51, 0.17)),
+    ));
+    if with_weapon {
         root.add_child(&instance(
-            &cube(Vector3::new(0.14, 0.12, 0.26)),
-            &feet,
-            at(Vector3::new(x, 0.06, 0.04)),
+            &sphere(0.19, 0.20, 6, 3),
+            &leather,
+            at(Vector3::new(0.0, 1.68, -0.025)),
         ));
+        root.add_child(&instance(
+            &cylinder(0.22, 0.22, 0.08, 10),
+            &leather,
+            trs(
+                Vector3::new(0.0, 0.78, 0.0),
+                0.0,
+                Vector3::new(1.0, 1.0, 0.8),
+            ),
+        ));
+        root.add_child(&instance(
+            &cube(Vector3::new(0.12, 0.10, 0.04)),
+            &trim,
+            at(Vector3::new(0.0, 0.78, 0.19)),
+        ));
+    }
+    if skeletal {
+        for y in [0.90, 1.02, 1.14] {
+            root.add_child(&instance(
+                &sphere(0.24, 0.07, 10, 4),
+                &cloth,
+                trs(
+                    Vector3::new(0.0, y, 0.02),
+                    0.0,
+                    Vector3::new(1.0, 1.0, 0.65),
+                ),
+            ));
+        }
+    }
+    let mut legs = Vec::new();
+    for side in [-1.0, 1.0] {
+        let mut leg = Node3D::new_alloc();
+        leg.set_position(Vector3::new(side * 0.13, 0.72, 0.0));
+        leg.add_child(&instance(
+            &capsule(if skeletal { 0.055 } else { 0.10 }, 0.55),
+            &cloth,
+            at(Vector3::new(0.0, -0.26, 0.0)),
+        ));
+        leg.add_child(&instance(
+            &capsule(0.105, 0.28),
+            if skeletal { &cloth } else { &leather },
+            at(Vector3::new(0.0, -0.53, 0.025)),
+        ));
+        leg.add_child(&instance(
+            &sphere(0.12, 0.16, 10, 4),
+            if skeletal { &cloth } else { &leather },
+            trs(
+                Vector3::new(0.0, -0.64, 0.075),
+                0.0,
+                Vector3::new(0.85, 1.0, 1.5),
+            ),
+        ));
+        root.add_child(&leg);
+        legs.push(leg);
+        root.add_child(&instance(
+            &capsule(if skeletal { 0.045 } else { 0.095 }, 0.50),
+            &cloth,
+            at(Vector3::new(side * 0.34, 0.98, 0.0)),
+        ));
+        root.add_child(&instance(
+            &sphere(0.085, 0.18, 10, 5),
+            &head_mat,
+            at(Vector3::new(side * 0.34, 0.70, 0.03)),
+        ));
+        if with_weapon {
+            root.add_child(&instance(
+                &sphere(0.18, 0.23, 6, 3),
+                &trim,
+                at(Vector3::new(side * 0.32, 1.24, 0.0)),
+            ));
+        }
+    }
+    if with_weapon {
+        let mut cape = SurfaceTool::new_gd();
+        cape.begin(godot::classes::mesh::PrimitiveType::TRIANGLES);
+        let points = [
+            Vector3::new(-0.24, 1.27, -0.18),
+            Vector3::new(0.24, 1.27, -0.18),
+            Vector3::new(-0.35, 0.28, -0.34),
+            Vector3::new(0.35, 0.28, -0.34),
+            Vector3::new(0.0, 0.70, -0.43),
+        ];
+        for (index, uv) in [
+            (0, (0.0, 0.0)),
+            (4, (0.5, 0.5)),
+            (1, (1.0, 0.0)),
+            (0, (0.0, 0.0)),
+            (2, (0.0, 1.0)),
+            (4, (0.5, 0.5)),
+            (1, (1.0, 0.0)),
+            (4, (0.5, 0.5)),
+            (3, (1.0, 1.0)),
+            (2, (0.0, 1.0)),
+            (3, (1.0, 1.0)),
+            (4, (0.5, 0.5)),
+        ] {
+            cape.set_uv(Vector2::new(uv.0, uv.1));
+            cape.add_vertex(points[index]);
+        }
+        cape.generate_normals();
+        if let Some(mesh) = cape.commit() {
+            let mut mat = lib
+                .material("cloak", Color::WHITE, 1.0, false)
+                .duplicate_resource();
+            mat.set_cull_mode(godot::classes::base_material_3d::CullMode::DISABLED);
+            root.add_child(&instance(&mesh.upcast(), &mat, at(Vector3::ZERO)));
+        }
     }
     let (mut pivot, mut weapon) = (None, None);
     if with_weapon {
         let mut p = Node3D::new_alloc();
-        p.set_position(Vector3::new(0.34, 0.95, 0.05));
+        p.set_position(Vector3::new(0.34, 0.70, 0.05));
         let w = instance(
-            &cube(Vector3::new(0.07, 0.07, 0.8)),
+            &cylinder(0.0, 0.065, 0.8, 4),
             &lib.material("metal", Color::WHITE, 1.0, false),
-            at(Vector3::new(0.0, 0.0, 0.4)),
+            Transform3D::new(
+                Basis::from_axis_angle(Vector3::RIGHT, std::f32::consts::FRAC_PI_2),
+                Vector3::new(0.0, 0.0, 0.4),
+            ),
         );
         p.add_child(&w);
         root.add_child(&p);
@@ -237,7 +408,8 @@ pub fn humanoid(
         body: Some(body),
         weapon_pivot: pivot,
         weapon,
-        height: 1.8,
+        height: 1.9,
+        legs,
     }
 }
 
@@ -263,6 +435,7 @@ pub fn slime(lib: &ContentLibrary, texture: &str, color: Color) -> ActorModel {
         weapon_pivot: None,
         weapon: None,
         height: 0.8,
+        legs: Vec::new(),
     }
 }
 
@@ -270,24 +443,32 @@ pub fn wolf(lib: &ContentLibrary, texture: &str, color: Color) -> ActorModel {
     let mut root = Node3D::new_alloc();
     let fur = lib.material(texture, color, 1.0, false);
     let body = instance(
-        &cube(Vector3::new(0.42, 0.42, 0.95)),
+        &sphere(0.30, 0.48, 12, 6),
         &fur,
-        at(Vector3::new(0.0, 0.55, 0.0)),
+        trs(
+            Vector3::new(0.0, 0.55, 0.0),
+            0.0,
+            Vector3::new(0.8, 1.0, 1.9),
+        ),
     );
     root.add_child(&body);
     root.add_child(&instance(
-        &cube(Vector3::new(0.34, 0.32, 0.38)),
+        &sphere(0.23, 0.38, 10, 5),
         &fur,
         at(Vector3::new(0.0, 0.78, 0.6)),
     ));
     root.add_child(&instance(
-        &cube(Vector3::new(0.18, 0.14, 0.22)),
+        &sphere(0.12, 0.18, 10, 5),
         &fur,
-        at(Vector3::new(0.0, 0.72, 0.86)),
+        trs(
+            Vector3::new(0.0, 0.72, 0.86),
+            0.0,
+            Vector3::new(0.8, 1.0, 1.8),
+        ),
     ));
     for x in [-0.12, 0.12] {
         root.add_child(&instance(
-            &cube(Vector3::new(0.08, 0.14, 0.06)),
+            &cylinder(0.0, 0.09, 0.25, 4),
             &fur,
             at(Vector3::new(x, 1.0, 0.55)),
         ));
@@ -300,18 +481,23 @@ pub fn wolf(lib: &ContentLibrary, texture: &str, color: Color) -> ActorModel {
             at(Vector3::new(x, 0.84, 0.8)),
         ));
     }
+    let mut legs = Vec::new();
     for (x, z) in [(-0.14, 0.32), (0.14, 0.32), (-0.14, -0.32), (0.14, -0.32)] {
-        root.add_child(&instance(
-            &cube(Vector3::new(0.12, 0.38, 0.12)),
+        let mut leg = Node3D::new_alloc();
+        leg.set_position(Vector3::new(x, 0.38, z));
+        leg.add_child(&instance(
+            &capsule(0.065, 0.38),
             &fur,
-            at(Vector3::new(x, 0.19, z)),
+            at(Vector3::new(0.0, -0.19, 0.0)),
         ));
+        root.add_child(&leg);
+        legs.push(leg);
     }
     root.add_child(&instance(
-        &cube(Vector3::new(0.1, 0.1, 0.45)),
+        &sphere(0.10, 0.55, 10, 5),
         &fur,
         Transform3D::new(
-            Basis::from_axis_angle(Vector3::RIGHT, 0.6),
+            Basis::from_axis_angle(Vector3::RIGHT, 1.0),
             Vector3::new(0.0, 0.7, -0.6),
         ),
     ));
@@ -321,6 +507,7 @@ pub fn wolf(lib: &ContentLibrary, texture: &str, color: Color) -> ActorModel {
         weapon_pivot: None,
         weapon: None,
         height: 1.1,
+        legs,
     }
 }
 

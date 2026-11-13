@@ -7,6 +7,7 @@ pub mod entities;
 pub mod environment;
 pub mod models;
 pub mod resources;
+pub mod structures;
 pub mod terrain;
 
 use godot::prelude::*;
@@ -24,6 +25,7 @@ use terrain::Terrain;
 pub struct WorldView {
     root: Gd<Node3D>,
     terrain: Terrain,
+    lighting: environment::Lighting,
     resources: ResourceField,
     pub entities: Entities,
     effects: Effects,
@@ -40,7 +42,8 @@ impl WorldView {
         let mut root = Node3D::new_alloc();
         root.set_name("World");
         parent.add_child(&root);
-        environment::build(&mut root);
+        let lighting = environment::build(&mut root);
+        terrain::set_heights(session.size, &session.heights);
         let terrain = Terrain::build(&mut root, session.size, &session.terrain, lib);
         let resources = ResourceField::build(
             &mut root,
@@ -56,6 +59,7 @@ impl WorldView {
         WorldView {
             root,
             terrain,
+            lighting,
             resources,
             entities,
             effects,
@@ -101,6 +105,7 @@ impl WorldView {
         self.entities.update(delta);
         self.effects.update(delta);
         if let Some(p) = self.entities.player_position(my_id) {
+            self.lighting.update(p.y < -5.0);
             self.camera.update(delta, p);
         }
     }

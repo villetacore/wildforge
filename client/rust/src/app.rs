@@ -225,13 +225,15 @@ impl WildforgeGame {
                 name,
                 size,
                 terrain,
+                heights,
                 nodes,
                 depleted,
                 content,
             } => {
                 if self.game.is_none() {
-                    let session =
+                    let mut session =
                         Session::new(id, name, Catalog::new(content), size, &terrain, &nodes);
+                    session.heights = heights;
                     self.start_game(session, depleted);
                 }
             }
