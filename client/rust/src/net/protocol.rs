@@ -298,6 +298,9 @@ pub struct You {
     pub marks: Vec<Mark>,
     pub title: String,
     pub tod: f32,
+    pub stamina: f32,
+    pub max_stamina: f32,
+    pub combo: i32,
 }
 
 #[derive(Deserialize, Debug, Clone, Default)]
@@ -317,6 +320,10 @@ pub struct PlayerState {
     pub helm: String,
     pub shield: String,
     pub look: Look,
+    pub anim: String,
+    pub seq: i64,
+    pub yaw: f32,
+    pub air: bool,
 }
 
 #[derive(Deserialize, Debug, Clone, Default)]
@@ -337,6 +344,8 @@ pub struct EnemyState {
     pub max_hp: f32,
     pub level: i32,
     pub status: Vec<String>,
+    pub anim: String,
+    pub seq: i64,
 }
 
 #[derive(Deserialize, Debug, Clone, Default)]

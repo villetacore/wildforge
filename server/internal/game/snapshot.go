@@ -13,6 +13,7 @@ func (g *Game) playerView(o *Player) protocol.Player {
 	v := protocol.Player{
 		ID: o.ID, Name: o.Name, Title: c.Title, X: c.X, Y: c.Y, HP: math.Round(c.HP),
 		MaxHP: math.Round(o.S.MaxHP), Level: c.Level, Look: c.Look,
+		Anim: o.A.Anim, Seq: o.A.Seq, Yaw: math.Round(math.Atan2(o.A.FaceX, o.A.FaceY)*100) / 100, Air: o.A.AirT > 0,
 	}
 	if s := c.Equip["weapon"]; s != nil {
 		v.Weapon, v.WColor = "sword", "#d0d4dc"
@@ -63,8 +64,10 @@ func (g *Game) broadcastState() {
 				Kills: c.Kills, Online: len(g.players),
 				Statuses: g.statusViews(c.Statuses), Spells: g.spellBar(p), Zone: zone, Target: p.Target,
 				Marks: g.contractMarks(p), Title: c.Title, TOD: math.Round(tod*1000) / 1000,
+				Combo: p.A.Combo,
 			},
 		}
+		m.You.Stamina, m.You.MaxStamina, _ = g.actionView(p)
 		if sig, _ := json.Marshal([]any{c.Inventory, c.Equip}); string(sig) != p.invSig {
 			p.invSig = string(sig)
 			inv := c.Inventory
@@ -94,6 +97,7 @@ func (g *Game) broadcastState() {
 				m.Enemies = append(m.Enemies, protocol.Enemy{
 					ID: id, Kind: e.Fam.ID, Name: e.Name, Model: e.Fam.Model, Tex: e.Fam.Texture, Color: e.Color, Glow: e.Glow,
 					Scale: e.Scale, Rank: e.Rank, X: e.X, Y: e.Y, HP: math.Round(e.HP), MaxHP: e.MaxHP, Level: e.Level, Status: st,
+					Anim: e.Anim, Seq: e.Seq,
 				})
 			}
 		}

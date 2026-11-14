@@ -236,6 +236,9 @@ func (g *Game) healPlayer(p *Player, amount float64, show bool) {
 // damagePlayer applies an enemy hit: dodge, armor, shield, statuses, thorns.
 func (g *Game) damagePlayer(p *Player, raw float64, src *Enemy) {
 	c := p.Ch
+	if raw = g.defend(p, raw, src); raw <= 0 {
+		return
+	}
 	if rand.Float64() < p.S.Dodge {
 		g.addFx("hurt", c.X, c.Y, "dodge")
 		return

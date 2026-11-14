@@ -251,7 +251,7 @@ impl Terrain {
                                 for k in 0..n {
                                     let gx = fx + rand01(i, 10 + k) * 0.95;
                                     let gz = fy + rand01(i, 20 + k) * 0.95;
-                                    let s = 0.7 + rand01(i, 30 + k) * 0.7;
+                                    let s = 0.4 + rand01(i, 30 + k) * 0.4;
                                     let tint = match c {
                                         11 => Color::from_rgb(0.35, 0.45, 0.2),
                                         3 => Color::from_rgb(0.25, 0.45, 0.18),

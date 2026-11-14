@@ -36,8 +36,12 @@ pub fn build(parent: &mut Gd<Node3D>) -> Lighting {
     env.set_glow_hdr_bleed_threshold(0.9);
     env.set_glow_blend_mode(GlowBlendMode::SOFTLIGHT);
     env.set_adjustment_enabled(true);
-    env.set_adjustment_saturation(1.1);
-    env.set_adjustment_contrast(1.06);
+    env.set_adjustment_saturation(1.0);
+    env.set_adjustment_contrast(1.08);
+    env.set_volumetric_fog_enabled(true);
+    env.set_volumetric_fog_density(0.006);
+    env.set_volumetric_fog_anisotropy(0.6);
+    env.set_volumetric_fog_length(80.0);
 
     let mut we = WorldEnvironment::new_alloc();
     we.set_environment(&env);

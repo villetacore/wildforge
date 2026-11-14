@@ -23,6 +23,13 @@ struct Ring {
     life: f32,
 }
 
+struct Slash {
+    mesh: Gd<MeshInstance3D>,
+    material: Gd<StandardMaterial3D>,
+    delay: f32,
+    t: f32,
+}
+
 struct Bolt {
     node: Gd<Node3D>,
     from: Vector3,
@@ -35,6 +42,7 @@ pub struct Effects {
     floaters: Vec<Floater>,
     rings: Vec<Ring>,
     bolts: Vec<Bolt>,
+    slashes: Vec<Slash>,
     torus: Gd<TorusMesh>,
 }
 
@@ -53,6 +61,7 @@ impl Effects {
             floaters: Vec::new(),
             rings: Vec::new(),
             bolts: Vec::new(),
+            slashes: Vec::new(),
             torus,
         }
     }
@@ -111,6 +120,40 @@ impl Effects {
         });
     }
 
+    /// A crescent blade trail in front of an attacker; vertical for overhead
+    /// chops. It appears when the blade actually moves (after `delay`).
+    pub fn slash(&mut self, pos: Vector3, yaw: f32, vertical: bool, delay: f32, color: Color) {
+        let mut material = StandardMaterial3D::new_gd();
+        material.set_shading_mode(ShadingMode::UNSHADED);
+        material.set_transparency(Transparency::ALPHA);
+        material.set_cull_mode(godot::classes::base_material_3d::CullMode::DISABLED);
+        material.set_blend_mode(godot::classes::base_material_3d::BlendMode::ADD);
+        material.set_albedo(Color::from_rgba(color.r, color.g, color.b, 0.0));
+        let mut mesh = MeshInstance3D::new_alloc();
+        mesh.set_mesh(&crescent());
+        mesh.set_material_override(&material.clone().upcast::<Material>());
+        mesh.set_cast_shadows_setting(
+            godot::classes::geometry_instance_3d::ShadowCastingSetting::OFF,
+        );
+        let tilt = if vertical {
+            Basis::from_axis_angle(Vector3::FORWARD, std::f32::consts::FRAC_PI_2)
+        } else {
+            Basis::IDENTITY
+        };
+        mesh.set_transform(Transform3D::new(
+            Basis::from_axis_angle(Vector3::UP, yaw) * tilt,
+            pos + Vector3::new(0.0, 1.1, 0.0)
+                + Basis::from_axis_angle(Vector3::UP, yaw) * Vector3::new(0.0, 0.0, 0.45),
+        ));
+        self.root.add_child(&mesh);
+        self.slashes.push(Slash {
+            mesh,
+            material,
+            delay,
+            t: 0.0,
+        });
+    }
+
     /// An expanding ring of the given radius (spell areas, explosions).
     pub fn nova(&mut self, pos: Vector3, radius: f32, color: Color) {
         self.ring_ex(pos, color, radius.max(0.8) * 2.5, 0.45);
@@ -140,6 +183,24 @@ impl Effects {
     }
 
     pub fn update(&mut self, delta: f32) {
+        self.slashes.retain_mut(|s| {
+            s.t += delta;
+            let k = (s.t - s.delay) / 0.22;
+            if k >= 1.0 {
+                s.mesh.queue_free();
+                return false;
+            }
+            let mut c = s.material.get_albedo();
+            c.a = if k < 0.0 { 0.0 } else { 0.9 * (1.0 - k) };
+            s.material.set_albedo(c);
+            let grow = 0.85 + k.max(0.0) * 0.25;
+            let tf = s.mesh.get_transform();
+            s.mesh.set_transform(Transform3D::new(
+                tf.basis.orthonormalized() * Basis::from_scale(Vector3::splat(grow)),
+                tf.origin,
+            ));
+            true
+        });
         self.bolts.retain_mut(|b| {
             b.t += delta;
             let k = (b.t / 0.25).min(1.0);
@@ -181,4 +242,34 @@ impl Effects {
             true
         });
     }
+}
+
+/// A flat half-ring facing up, opening forward (+Z): the shape of a sword arc.
+fn crescent() -> Gd<godot::classes::Mesh> {
+    use godot::classes::mesh::PrimitiveType;
+    use godot::classes::SurfaceTool;
+    let mut st = SurfaceTool::new_gd();
+    st.begin(PrimitiveType::TRIANGLES);
+    let n = 20;
+    for i in 0..n {
+        let a0 = -1.3 + 2.6 * i as f32 / n as f32;
+        let a1 = -1.3 + 2.6 * (i + 1) as f32 / n as f32;
+        let fade = |a: f32| 1.0 - (a / 1.3).abs().powi(2);
+        let pt = |a: f32, r: f32| Vector3::new(a.sin() * r, 0.0, a.cos() * r);
+        let w0 = 0.12 + 0.35 * fade(a0);
+        let w1 = 0.12 + 0.35 * fade(a1);
+        let quad = [
+            pt(a0, 1.5),
+            pt(a1, 1.5),
+            pt(a1, 1.5 - w1),
+            pt(a0, 1.5),
+            pt(a1, 1.5 - w1),
+            pt(a0, 1.5 - w0),
+        ];
+        for v in quad {
+            st.set_normal(Vector3::UP);
+            st.add_vertex(v);
+        }
+    }
+    st.commit().unwrap().upcast()
 }

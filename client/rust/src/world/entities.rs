@@ -65,11 +65,28 @@ struct Actor {
     t: f32,
     fixed_yaw: Option<f32>,
     frozen: bool,
+    anim: String,
+    anim_t: f32,
+    seq: i64,
+    face: Option<f32>,
 }
 
 impl Actor {
     fn free(&mut self) {
         self.model.root.queue_free();
+    }
+
+    /// Starts a server-driven animation when its sequence number changes.
+    /// Returns true if a new animation began.
+    fn set_anim(&mut self, anim: &str, seq: i64) -> bool {
+        if seq == self.seq {
+            return false;
+        }
+        let first = self.seq < 0;
+        self.seq = seq;
+        self.anim = anim.to_string();
+        self.anim_t = 0.0;
+        !first
     }
 
     fn set_target(&mut self, x: f32, y: f32) {
@@ -103,8 +120,19 @@ impl Actor {
         self.pos.y = super::terrain::height(self.pos.x, self.pos.z);
         let moved = self.pos - before;
         let speed = Vector2::new(moved.x, moved.z).length() / delta.max(1e-4);
+        self.anim_t += delta;
+        let pose = super::anim::pose(&self.anim, self.anim_t);
         if let Some(y) = self.fixed_yaw {
             self.yaw = y;
+        } else if let (Some(face), Some(_)) = (self.face, pose) {
+            let mut d = face - self.yaw;
+            while d > PI {
+                d -= 2.0 * PI;
+            }
+            while d < -PI {
+                d += 2.0 * PI;
+            }
+            self.yaw += d * (1.0 - (-delta * 20.0).exp());
         } else if Vector2::new(moved.x, moved.z).length() > 0.002 {
             let want = moved.x.atan2(moved.z);
             let mut d = want - self.yaw;
@@ -171,14 +199,34 @@ impl Actor {
         } else {
             0.0
         };
+        // Combat poses override the walk cycle.
+        let (mut lift, mut pitch, mut twist) = (0.0, 0.0, 0.0);
+        if let Some(p) = pose {
+            if m.arms.len() >= 2 {
+                m.arms[1].set_rotation(p.arm_r);
+                m.arms[0].set_rotation(Vector3::new(p.arm_l.x, -p.arm_l.y, -p.arm_l.z));
+            }
+            if p.legs != 0.0 {
+                for leg in m.legs.iter_mut() {
+                    let r = leg.get_rotation();
+                    leg.set_rotation(Vector3::new(r.x * 0.3 + p.legs, 0.0, 0.0));
+                }
+            }
+            lift = p.lift;
+            pitch = p.pitch + p.lean;
+            twist = p.twist;
+            if let Some(w) = &mut m.weapon_pivot {
+                w.set_rotation(p.weapon);
+            }
+        }
         let root = &mut m.root;
-        root.set_position(self.pos + Vector3::new(0.0, bob + hover, 0.0));
-        root.set_rotation(Vector3::new(0.0, self.yaw, 0.0));
+        root.set_position(self.pos + Vector3::new(0.0, bob + hover + lift * self.scale, 0.0));
+        root.set_rotation(Vector3::new(pitch, self.yaw + twist, 0.0));
         if self.slime {
             let (s, w) = (self.scale, 1.0 / squash.sqrt());
             root.set_scale(Vector3::new(s * w, s * squash, s * w));
         }
-        if let Some(p) = &mut m.weapon_pivot {
+        if let (Some(p), None) = (&mut m.weapon_pivot, pose) {
             if self.swing > 0.0 {
                 self.swing = (self.swing - delta).max(0.0);
                 let k = 1.0 - self.swing / 0.3;
@@ -212,6 +260,8 @@ pub struct Entities {
     ring: Gd<MeshInstance3D>,
     ring_mat: Gd<StandardMaterial3D>,
     pub target: i64,
+    /// Blade trails to draw: (position, yaw, vertical, delay, color).
+    pub slashes: Vec<(Vector3, f32, bool, f32, Color)>,
 }
 
 fn style_from_look(look: &Look) -> HumanStyle {
@@ -340,6 +390,7 @@ impl Entities {
             ring,
             ring_mat,
             target: 0,
+            slashes: Vec::new(),
         }
     }
 
@@ -403,6 +454,10 @@ impl Entities {
             t: (x * 7.0 + y * 3.0) % 10.0,
             fixed_yaw: None,
             frozen: false,
+            anim: String::new(),
+            anim_t: 0.0,
+            seq: -1,
+            face: None,
         }
     }
 
@@ -447,6 +502,18 @@ impl Entities {
                 self.players.insert(p.id, a);
             }
             let a = self.players.get_mut(&p.id).unwrap();
+            a.face = Some(p.yaw);
+            if a.set_anim(&p.anim, p.seq) {
+                if let Some((delay, vertical)) = super::anim::is_slash(&p.anim) {
+                    let color = if p.wcolor.is_empty() {
+                        Color::from_rgb(0.9, 0.95, 1.0)
+                    } else {
+                        parse_color(&p.wcolor).lightened(0.4)
+                    };
+                    self.slashes
+                        .push((to_world(p.x, p.y), p.yaw, vertical, delay, color));
+                }
+            }
             a.set_target(p.x, p.y);
             a.set_hp(p.hp, p.max_hp);
             let title = if p.title.is_empty() {
@@ -524,10 +591,14 @@ impl Entities {
                 self.enemies.insert(e.id, a);
             }
             let a = self.enemies.get_mut(&e.id).unwrap();
+            a.set_anim(&e.anim, e.seq);
             a.set_target(e.x, e.y);
             a.set_hp(e.hp, e.max_hp);
+            // Witcher-style: only the target, elites and wounded foes show their name.
+            let show = e.id == self.target || e.rank >= 3;
+            a.label.set_visible(show);
             if let Some(bar) = &mut a.bar {
-                bar.set_visible(e.hp < e.max_hp || e.id == self.target);
+                bar.set_visible((e.hp < e.max_hp && e.rank >= 2) || e.id == self.target);
             }
             a.frozen = e.status.iter().any(|s| s == "freeze" || s == "stun");
         }

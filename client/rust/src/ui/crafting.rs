@@ -76,6 +76,10 @@ impl CraftingPanel {
         });
     }
 
+    pub fn visible(&self) -> bool {
+        self.root.is_visible()
+    }
+
     pub fn toggle(&mut self) {
         let v = !self.root.is_visible();
         self.root.set_visible(v);

@@ -27,6 +27,7 @@ type Player struct {
 	Zone     int
 	invSig   string
 	God      bool // dev: ignore damage
+	A        Action
 	out      chan []byte
 }
 
@@ -83,6 +84,8 @@ func (g *Game) join(ev event) {
 	}
 	p := &Player{ID: ev.id, Name: ev.name, Ch: ch, SinceHit: 99, out: ev.out, SpellCD: map[string]float64{}, Zone: -1}
 	p.S = g.computeStats(ch)
+	p.A.Stamina = p.maxStamina()
+	p.A.FaceY = 1
 	if ch.HP <= 0 {
 		ch.HP = p.S.MaxHP
 	}
@@ -142,7 +145,19 @@ func (g *Game) input(p *Player, m protocol.ClientMsg) {
 			p.DirX, p.DirY = 0, 0
 		}
 	case "attack":
-		g.playerAttack(p)
+		kind := m.Opt
+		if kind != "heavy" {
+			kind = "light"
+		}
+		g.attackInput(p, kind, m.DX, m.DY)
+	case "dodge":
+		g.dodge(p, m.DX, m.DY)
+	case "jump":
+		g.jump(p)
+	case "block":
+		g.setBlock(p, m.Opt == "on")
+	case "sprint":
+		p.A.Sprint = m.Opt == "on"
 	case "gather":
 		g.interact(p)
 	case "craft":
@@ -207,9 +222,22 @@ func (g *Game) tickPlayers() {
 		if hot > 0 {
 			c.HP = math.Min(p.S.MaxHP, c.HP+p.S.MaxHP*hot)
 		}
+		g.tickAction(p)
 		m := g.mods(c.Statuses)
-		if (p.DirX != 0 || p.DirY != 0) && !m.stun {
-			sp := p.S.Speed * (1 - m.slow) * dt
+		if (p.DirX != 0 || p.DirY != 0) && !m.stun && p.A.DodgeT <= 0 && p.A.T < 0.9 {
+			mult := 1.0
+			switch {
+			case p.A.Atk != nil:
+				mult = 0.2
+			case p.A.Blocking:
+				mult = blockMult
+			case p.A.Sprint:
+				mult = sprintMult
+			}
+			if p.A.Atk == nil && !p.A.Blocking {
+				p.A.FaceX, p.A.FaceY = p.DirX, p.DirY
+			}
+			sp := p.S.Speed * (1 - m.slow) * dt * mult
 			c.X, c.Y = g.world.Step(c.X, c.Y, p.DirX*sp, p.DirY*sp)
 			if p.Dialog != 0 {
 				if n, ok := g.npcs[p.Dialog]; ok && dist(c.X, c.Y, n.X, n.Y) > talkRange+2 {

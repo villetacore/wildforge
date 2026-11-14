@@ -44,6 +44,17 @@ type Enemy struct {
 	ContractOwner int64
 	ContractID    int64
 	Respawns      bool // surface population that refills on death
+
+	Windup   float64 // telegraphed attack in progress
+	StaggerT float64
+	Riposte  bool // staggered by a parry: the next hit is a riposte
+	Anim     string
+	Seq      int
+}
+
+func (e *Enemy) anim(name string) {
+	e.Anim = name
+	e.Seq++
 }
 
 func (g *Game) rankDef(i int) *content.Rank { return &g.pack.Bestiary.Ranks[i] }
@@ -261,6 +272,14 @@ func (g *Game) tickEnemies() {
 		if m.stun {
 			continue
 		}
+		if e.StaggerT > 0 {
+			e.StaggerT -= dt
+			if e.StaggerT <= 0 {
+				e.Riposte = false
+				e.anim("idle")
+			}
+			continue
+		}
 		speed := e.Speed * (1 - m.slow)
 		leash := leashRange
 		if e.Dungeon >= 0 {
@@ -329,17 +348,30 @@ func (g *Game) enemyEngage(e *Enemy, tx, ty, speed float64, m statusMods, hit fu
 		reach = e.Fam.Range
 	}
 	clear := g.world.ClearLine(e.X, e.Y, tx, ty)
+	// A telegraphed blow: the enemy winds up visibly, then strikes whatever is
+	// still in reach. Players can roll, jump, block or parry in that window.
+	if e.Windup > 0 {
+		e.Windup -= dt
+		if e.Windup <= 0 {
+			e.anim("attack")
+			if d <= reach*1.3 && clear {
+				raw := e.Dmg * m.dealt
+				if ranged {
+					g.fx = append(g.fx, fxBolt(e.X, e.Y, tx, ty, e.Fam.Bolt))
+				}
+				hit(raw)
+			}
+		}
+		return
+	}
 	if d > reach*0.85 || !clear {
 		s := speed * dt / math.Max(d, 0.01)
 		g.enemyStep(e, (tx-e.X)*s, (ty-e.Y)*s)
 	}
 	if d <= reach && clear && e.AttackCD <= 0 {
-		e.AttackCD = (1.0 + 0.4*b2f(ranged)) / e.AtkSpeed
-		raw := e.Dmg * m.dealt
-		if ranged {
-			g.fx = append(g.fx, fxBolt(e.X, e.Y, tx, ty, e.Fam.Bolt))
-		}
-		hit(raw)
+		e.AttackCD = (1.1 + 0.4*b2f(ranged)) / e.AtkSpeed
+		e.Windup = (0.55 - 0.15*b2f(ranged)) / math.Sqrt(e.AtkSpeed)
+		e.anim("windup")
 	}
 }
 

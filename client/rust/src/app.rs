@@ -116,6 +116,7 @@ impl INode3D for WildforgeGame {
         self.poll_network();
         self.drain_ui();
         self.handle_input(delta);
+        self.update_mouse_mode();
         self.run_script(delta);
         if let (Some(g), Some(lib)) = (&mut self.game, &self.lib) {
             g.world.update(delta, &g.session);
@@ -133,6 +134,7 @@ impl INode3D for WildforgeGame {
         if self.game.is_none() {
             return;
         }
+        let action_mode = self.action_mode();
         if let Ok(mb) = event.clone().try_cast::<InputEventMouseButton>() {
             let pressed = mb.is_pressed();
             match mb.get_button_index() {
@@ -142,20 +144,17 @@ impl INode3D for WildforgeGame {
                 MouseButton::WHEEL_DOWN if pressed => {
                     self.game.as_mut().unwrap().world.camera.zoom(1.0)
                 }
-                MouseButton::RIGHT | MouseButton::MIDDLE => {
+                // Action mode: the mouse aims the camera, buttons attack.
+                MouseButton::LEFT if action_mode && pressed => self.attack("light"),
+                MouseButton::RIGHT if action_mode && pressed => self.attack("heavy"),
+                // Cursor mode (Ctrl held or a window open): drag to orbit, click to pick.
+                MouseButton::RIGHT | MouseButton::MIDDLE if !action_mode => {
                     self.dragging = pressed;
-                    Input::singleton().set_mouse_mode(if pressed {
-                        MouseMode::CAPTURED
-                    } else {
-                        MouseMode::VISIBLE
-                    });
-                    if !pressed {
-                        Input::singleton().warp_mouse(self.press_pos);
-                    } else {
+                    if pressed {
                         self.press_pos = mb.get_position();
                     }
                 }
-                MouseButton::LEFT => {
+                MouseButton::LEFT if !action_mode => {
                     if pressed {
                         self.press_pos = mb.get_position();
                         self.drag_moved = 0.0;
@@ -168,13 +167,14 @@ impl INode3D for WildforgeGame {
         } else if let Ok(mm) = event.try_cast::<InputEventMouseMotion>() {
             let rel = mm.get_relative();
             self.drag_moved += rel.length();
-            if self.dragging {
+            if action_mode || self.dragging {
+                let s = if action_mode { 0.8 } else { 1.0 };
                 self.game
                     .as_mut()
                     .unwrap()
                     .world
                     .camera
-                    .rotate(rel.x, rel.y);
+                    .rotate(rel.x * s, rel.y * s);
             }
         }
     }
@@ -231,6 +231,43 @@ impl WildforgeGame {
         if let Some(g) = &mut self.game {
             g.hud.chat_line(bbcode);
         }
+    }
+
+    /// Action mode captures the mouse for camera and attacks; it is off
+    /// while Ctrl is held or any window wants the cursor.
+    fn action_mode(&self) -> bool {
+        let Some(g) = &self.game else { return false };
+        let ctrl = Input::singleton().is_physical_key_pressed(godot::global::Key::CTRL);
+        !(ctrl
+            || g.dialog.visible()
+            || g.crafting.visible()
+            || g.hud.cursor_wanted()
+            || g.hud.chat_focused())
+    }
+
+    fn update_mouse_mode(&mut self) {
+        let want = if self.game.is_some() && self.action_mode() {
+            MouseMode::CAPTURED
+        } else {
+            MouseMode::VISIBLE
+        };
+        let mut input = Input::singleton();
+        if input.get_mouse_mode() != want {
+            input.set_mouse_mode(want);
+        }
+    }
+
+    /// Camera-forward direction on the ground, as server (x, y).
+    fn aim(&self) -> Vector2 {
+        self.game
+            .as_ref()
+            .map(|g| g.world.camera.basis_2d().0)
+            .unwrap_or(Vector2::new(0.0, 1.0))
+    }
+
+    fn attack(&mut self, kind: &str) {
+        let f = self.aim();
+        self.send(json!({ "t": "attack", "opt": kind, "dx": f.x, "dy": f.y }));
     }
 
     /// Left click in the world: select an enemy (and attack it if it was
@@ -292,6 +329,11 @@ impl WildforgeGame {
                 self.send(json!({ "t": "move", "dx": num(0), "dy": num(1) }));
             }
             "target" => self.next_target(),
+            "attack" => self.attack(if arg == "heavy" { "heavy" } else { "light" }),
+            "act" => {
+                let (kind, opt) = arg.split_once(' ').unwrap_or((arg, ""));
+                self.send(json!({ "t": kind, "opt": opt }));
+            }
             "yaw" | "pitch" | "zoom" => {
                 if let Some(g) = &mut self.game {
                     g.world.camera.set_view(cmd, num(0));
@@ -583,7 +625,15 @@ impl WildforgeGame {
         for c in commands {
             let msg = match c {
                 Command::Move => continue,
-                Command::Attack => json!({ "t": "attack" }),
+                Command::Jump => json!({ "t": "jump" }),
+                Command::Dodge => {
+                    let d = self.sent_dir;
+                    json!({ "t": "dodge", "dx": d.x, "dy": d.y })
+                }
+                Command::Block(on) => json!({ "t": "block", "opt": if on { "on" } else { "off" } }),
+                Command::Sprint(on) => {
+                    json!({ "t": "sprint", "opt": if on { "on" } else { "off" } })
+                }
                 Command::Gather => json!({ "t": "gather" }),
                 Command::Potion => json!({ "t": "potion" }),
                 Command::Tame => json!({ "t": "tame" }),

@@ -1,10 +1,12 @@
 //! The 3D world view: everything drawn in the scene for one game session.
 //! It owns Godot nodes under a single root and is rebuilt on every login.
 
+pub mod anim;
 pub mod camera;
 pub mod effects;
 pub mod entities;
 pub mod environment;
+pub mod grade;
 pub mod models;
 pub mod resources;
 pub mod structures;
@@ -35,6 +37,7 @@ pub struct WorldView {
     pub entities: Entities,
     effects: Effects,
     pub camera: CameraRig,
+    pub grade: grade::Grade,
 }
 
 impl WorldView {
@@ -91,6 +94,7 @@ impl WorldView {
         entities.spawn_npcs(&session.npcs, lib);
         let effects = Effects::new(&mut root);
         let camera = CameraRig::new(&mut root);
+        let grade = grade::Grade::build(&mut root);
         WorldView {
             root,
             terrain,
@@ -101,6 +105,7 @@ impl WorldView {
             entities,
             effects,
             camera,
+            grade,
         }
     }
 
@@ -145,6 +150,10 @@ impl WorldView {
                         .nova(pos, f.r, custom.unwrap_or(Color::from_rgb(1.0, 0.8, 0.4)));
                     continue;
                 }
+                "shake" => {
+                    self.camera.shake(f.r);
+                    continue;
+                }
                 "cast" => {
                     self.entities.swing_at(f.x, f.y);
                     continue;
@@ -183,6 +192,9 @@ impl WorldView {
         self.terrain.update(delta);
         self.resources.update(delta);
         self.entities.update(delta);
+        for (pos, yaw, vertical, delay, color) in self.entities.slashes.drain(..) {
+            self.effects.slash(pos, yaw, vertical, delay, color);
+        }
         self.effects.update(delta);
         if let Some(p) = self.entities.player_position(session.my_id) {
             let underground = p.y < -5.0;
@@ -209,6 +221,7 @@ impl WorldView {
             self.lighting
                 .update(delta, session.you.tod, underground, fog, ambient, density);
             self.town.update(session.you.tod, self.lighting.night);
+            self.grade.update(self.lighting.night);
             let (size, codes) = (session.size, &session.terrain);
             let blocked = |x: f32, z: f32| -> bool {
                 if x < 0.0 || z < 0.0 || x >= size as f32 || z >= size as f32 {

@@ -210,6 +210,9 @@ type You struct {
 	Marks      []Mark                    `json:"marks"`
 	Title      string                    `json:"title"`
 	TOD        float64                   `json:"tod"`
+	Stamina    float64                   `json:"stamina"`
+	MaxStamina float64                   `json:"max_stamina"`
+	Combo      int                       `json:"combo"`
 }
 
 type Player struct {
@@ -227,6 +230,10 @@ type Player struct {
 	Helm   string  `json:"helm"`
 	Shield string  `json:"shield"`
 	Look   Look    `json:"look"`
+	Anim   string  `json:"anim"`
+	Seq    int     `json:"seq"`
+	Yaw    float64 `json:"yaw"`
+	Air    bool    `json:"air"`
 }
 
 type Enemy struct {
@@ -245,6 +252,8 @@ type Enemy struct {
 	MaxHP  float64  `json:"max_hp"`
 	Level  int      `json:"level"`
 	Status []string `json:"status"`
+	Anim   string   `json:"anim"`
+	Seq    int      `json:"seq"`
 }
 
 type Pet struct {

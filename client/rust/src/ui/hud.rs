@@ -30,6 +30,8 @@ pub struct Hud {
     hp: Gd<ProgressBar>,
     mana_label: Gd<Label>,
     mana: Gd<ProgressBar>,
+    stamina: Gd<ProgressBar>,
+    combo: Gd<Label>,
     xp: Gd<ProgressBar>,
     mood: Gd<ProgressBar>,
     stats: Gd<Label>,
@@ -77,6 +79,7 @@ impl Hud {
         let hp = small_bar(Color::from_rgb(0.82, 0.18, 0.18), 16.0);
         let mana_label = label("", 12);
         let mana = small_bar(Color::from_rgb(0.22, 0.42, 0.9), 12.0);
+        let stamina = small_bar(Color::from_rgb(0.86, 0.74, 0.28), 8.0);
         let xp = small_bar(Color::from_rgb(0.6, 0.38, 0.9), 6.0);
         let mood = small_bar(Color::from_rgb(1.0, 0.55, 0.75), 5.0);
         let mut stats = label("", 12);
@@ -93,6 +96,7 @@ impl Hud {
             hp.clone().upcast(),
             mana_label.clone().upcast(),
             mana.clone().upcast(),
+            stamina.clone().upcast(),
             xp.clone().upcast(),
             mood.clone().upcast(),
             stats.clone().upcast(),
@@ -251,7 +255,16 @@ impl Hud {
         iv.add_child(&row1);
         iv.add_child(&row2);
         inv_panel.add_child(&iv);
+        inv_panel.set_visible(false);
         layer.add_child(&inv_panel);
+
+        // Combo counter, right of centre.
+        let mut combo = label("", 34);
+        combo.set_position(Vector2::new(SCREEN_W / 2.0 + 120.0, SCREEN_H / 2.0 - 60.0));
+        combo.add_theme_constant_override("outline_size", 8);
+        combo.add_theme_color_override("font_outline_color", Color::from_rgb(0.0, 0.0, 0.0));
+        combo.set_mouse_filter(MouseFilter::IGNORE);
+        layer.add_child(&combo);
 
         // Chat, bottom left.
         let mut cp = panel(
@@ -308,7 +321,7 @@ impl Hud {
         bars.add_child(&bv);
         layer.add_child(&bars);
 
-        let mut help = label("WASD move · RMB drag camera · wheel zoom · click target · Space attack · R F G T Z X spells · E interact · Y tame · Q potion · Tab target · I bag · M map · Esc close", 11);
+        let mut help = label("LMB light · RMB heavy · Q block/parry · Alt dodge · Space jump · Shift sprint · Tab lock · R F G T Z X spells · E interact · V potion · Ctrl cursor · I bag · M map", 11);
         help.set_modulate(Color::from_rgba(1.0, 1.0, 1.0, 0.7));
         help.set_position(Vector2::new(442.0, SCREEN_H - 20.0));
         help.set_mouse_filter(MouseFilter::IGNORE);
@@ -347,6 +360,8 @@ impl Hud {
             hp,
             mana_label,
             mana,
+            stamina,
+            combo,
             xp,
             mood,
             stats,
@@ -382,6 +397,11 @@ impl Hud {
 
     pub fn chat_focused(&self) -> bool {
         self.chat_input.has_focus()
+    }
+
+    /// Windows that need a free mouse cursor.
+    pub fn cursor_wanted(&self) -> bool {
+        self.inv_panel.is_visible() || self.bigmap.is_visible()
     }
 
     pub fn toggle_inventory(&mut self) {
@@ -485,6 +505,13 @@ impl Hud {
         ));
         self.mana.set_max(you.max_mana.max(1.0) as f64);
         self.mana.set_value(you.mana as f64);
+        self.stamina.set_max(you.max_stamina.max(1.0) as f64);
+        self.stamina.set_value(you.stamina.max(0.0) as f64);
+        self.combo.set_text(&if you.combo >= 2 {
+            format!("{} HIT COMBO", you.combo)
+        } else {
+            String::new()
+        });
         self.xp.set_max(you.xp_next.max(1) as f64);
         self.xp.set_value(you.xp as f64);
         self.mood.set_max(100.0);

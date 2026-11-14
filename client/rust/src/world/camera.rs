@@ -22,6 +22,8 @@ pub struct CameraRig {
     target_pitch: f32,
     smoothed_pitch: f32,
     snapped: bool,
+    trauma: f32,
+    t: f32,
 }
 
 impl CameraRig {
@@ -43,6 +45,8 @@ impl CameraRig {
             target_pitch: 0.45,
             smoothed_pitch: 0.45,
             snapped: false,
+            trauma: 0.0,
+            t: 0.0,
         }
     }
 
@@ -55,6 +59,11 @@ impl CameraRig {
     pub fn rotate(&mut self, dx: f32, dy: f32) {
         self.target_yaw -= dx * 0.006;
         self.target_pitch = (self.target_pitch + dy * 0.005).clamp(MIN_PITCH, MAX_PITCH);
+    }
+
+    /// Adds screen shake (0..1).
+    pub fn shake(&mut self, amount: f32) {
+        self.trauma = (self.trauma + amount).min(1.0);
     }
 
     /// Sets a view parameter directly (used by scripted screenshots).
@@ -153,6 +162,15 @@ impl CameraRig {
         if pos.y < ground && !underground {
             pos.y = ground;
         }
-        self.cam.look_at_from_position(pos, look);
+        self.t += delta;
+        self.trauma = (self.trauma - delta * 2.2).max(0.0);
+        let shake = self.trauma * self.trauma * 0.35;
+        let jitter = Vector3::new(
+            (self.t * 47.0).sin(),
+            (self.t * 53.0).cos(),
+            (self.t * 41.0).sin(),
+        ) * shake;
+        self.cam
+            .look_at_from_position(pos + jitter, look + jitter * 0.5);
     }
 }

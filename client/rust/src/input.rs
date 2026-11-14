@@ -10,7 +10,10 @@ use godot::prelude::*;
 pub enum Command {
     /// Movement keys changed; the app reads `direction()` every frame.
     Move,
-    Attack,
+    Jump,
+    Dodge,
+    Block(bool),
+    Sprint(bool),
     Gather,
     Potion,
     Tame,
@@ -29,7 +32,8 @@ pub enum Command {
 pub struct InputState {
     last_dir: (i32, i32),
     down: HashSet<i32>,
-    attack_repeat: f32,
+    blocking: bool,
+    sprinting: bool,
     gather_repeat: f32,
     /// Blocks re-opening chat on the same Enter press that sent a message.
     pub chat_block: f32,
@@ -67,7 +71,6 @@ impl InputState {
         let input = Input::singleton();
         let mut out = Vec::new();
         self.chat_block -= delta;
-        self.attack_repeat -= delta;
         self.gather_repeat -= delta;
 
         if self.just_pressed(&input, Key::ENTER) && self.chat_block <= 0.0 {
@@ -86,16 +89,25 @@ impl InputState {
             self.last_dir = (right, fwd);
             out.push(Command::Move);
         }
-        if input.is_physical_key_pressed(Key::SPACE) && self.attack_repeat <= 0.0 {
-            self.attack_repeat = 0.25;
-            out.push(Command::Attack);
+        // Hold-to keys: block (Q) and sprint (Shift).
+        let block = input.is_physical_key_pressed(Key::Q);
+        if block != self.blocking {
+            self.blocking = block;
+            out.push(Command::Block(block));
+        }
+        let sprint = input.is_physical_key_pressed(Key::SHIFT);
+        if sprint != self.sprinting {
+            self.sprinting = sprint;
+            out.push(Command::Sprint(sprint));
         }
         if input.is_physical_key_pressed(Key::E) && self.gather_repeat <= 0.0 {
             self.gather_repeat = 0.3;
             out.push(Command::Gather);
         }
         for (key, cmd) in [
-            (Key::Q, Command::Potion),
+            (Key::SPACE, Command::Jump),
+            (Key::ALT, Command::Dodge),
+            (Key::V, Command::Potion),
             (Key::Y, Command::Tame),
             (Key::C, Command::ToggleCrafting),
             (Key::I, Command::ToggleInventory),
