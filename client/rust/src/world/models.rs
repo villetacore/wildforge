@@ -530,9 +530,17 @@ pub struct ActorModel {
     pub wings: Vec<Gd<Node3D>>,
     pub float: f32,
     pub head: Option<Gd<Node3D>>,
+    /// Skeletal characters: their animation player and scene root.
+    pub rig: Option<Gd<godot::classes::AnimationPlayer>>,
+    pub rig_root: Option<Gd<Node3D>>,
+    pub clip: String,
 }
 
 impl ActorModel {
+    pub fn empty(height: f32) -> ActorModel {
+        ActorModel::new(height)
+    }
+
     fn new(height: f32) -> ActorModel {
         ActorModel {
             root: Node3D::new_alloc(),
@@ -545,6 +553,9 @@ impl ActorModel {
             wings: Vec::new(),
             float: 0.0,
             head: None,
+            rig: None,
+            rig_root: None,
+            clip: String::new(),
         }
     }
     fn add(&mut self, mi: Gd<MeshInstance3D>) -> Gd<MeshInstance3D> {

@@ -4,3 +4,4 @@
 server/data/
 server/wildforge-server
 content/**/.DS_Store
+content/models/

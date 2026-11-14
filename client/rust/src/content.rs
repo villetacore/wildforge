@@ -6,7 +6,10 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use godot::classes::base_material_3d::{Feature, Flags, TextureFilter, TextureParam};
-use godot::classes::{Image, ImageTexture, Os, ProjectSettings, StandardMaterial3D, Texture2D};
+use godot::classes::{
+    GltfDocument, GltfState, Image, ImageTexture, Node3D, Os, ProjectSettings, StandardMaterial3D,
+    Texture2D,
+};
 use godot::prelude::*;
 
 /// Parses "#rrggbb" (or "rrggbb") into a color; magenta on error.
@@ -47,6 +50,7 @@ pub struct ContentLibrary {
     normals: RefCell<HashMap<String, Option<Gd<Texture2D>>>>,
     materials: RefCell<HashMap<String, Gd<StandardMaterial3D>>>,
     icons: RefCell<HashMap<String, Gd<Texture2D>>>,
+    gltf: RefCell<HashMap<String, Option<Gd<GltfState>>>>,
 }
 
 impl ContentLibrary {
@@ -64,6 +68,7 @@ impl ContentLibrary {
             normals: RefCell::default(),
             materials: RefCell::default(),
             icons: RefCell::default(),
+            gltf: RefCell::default(),
         }
     }
 
@@ -82,6 +87,37 @@ impl ContentLibrary {
             .borrow_mut()
             .insert(name.to_string(), tex.clone());
         tex
+    }
+
+    /// A new instance of content/models/<name>.glb, parsed once and cached.
+    pub fn model_scene(&self, name: &str) -> Option<Gd<Node3D>> {
+        let state = {
+            let cached = self.gltf.borrow().get(name).cloned();
+            match cached {
+                Some(s) => s,
+                None => {
+                    let state = self.dir.as_ref().and_then(|d| {
+                        let path = d.join("models").join(format!("{name}.glb"));
+                        if !path.exists() {
+                            return None;
+                        }
+                        let mut doc = GltfDocument::new_gd();
+                        let state = GltfState::new_gd();
+                        let err = doc.append_from_file(path.to_string_lossy().as_ref(), &state);
+                        (err == godot::global::Error::OK).then_some(state)
+                    });
+                    if state.is_none() {
+                        godot_warn!("wildforge: model {name} not found, using a procedural one");
+                    }
+                    self.gltf
+                        .borrow_mut()
+                        .insert(name.to_string(), state.clone());
+                    state
+                }
+            }
+        }?;
+        let mut doc = GltfDocument::new_gd();
+        doc.generate_scene(&state)?.try_cast::<Node3D>().ok()
     }
 
     /// A normal map derived from the texture's brightness (cached).

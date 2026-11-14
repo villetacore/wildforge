@@ -59,6 +59,7 @@ type Look struct {
 	Eyes      int  `json:"eyes"`
 	Female    bool `json:"female"`
 	Done      bool `json:"done"`
+	Model     int  `json:"model"` // 0-4 skeletal hero models, 5 classic procedural
 }
 
 type NPC struct {

@@ -17,6 +17,7 @@ var (
 	beardNames = []string{"Clean-shaven", "Stubble", "Full beard", "Long beard"}
 	buildNames = []string{"Slim", "Average", "Broad"}
 	eyeNames   = []string{"Brown", "Blue", "Green", "Grey", "Amber"}
+	modelNames = []string{"Knight", "Barbarian", "Mage", "Rogue", "Hooded Rogue", "Classic (customisable)"}
 	spellKeys  = []string{"R", "F", "G", "T", "Z", "X"}
 )
 
@@ -366,6 +367,8 @@ func (g *Game) lookMenu(p *Player, opt string) {
 		cyc(&l.Build, len(buildNames))
 	case "eyes":
 		cyc(&l.Eyes, len(eyeNames))
+	case "model":
+		cyc(&l.Model, len(modelNames))
 	case "sex":
 		l.Female = !l.Female
 		if l.Female {
@@ -382,7 +385,10 @@ func (g *Game) lookMenu(p *Player, opt string) {
 		body = "Female"
 	}
 	d := menuDialog("look", "Appearance", "Shape your hero. Watch your character change as you click. A barber in Velhrad can change this later.")
-	d.opt("sex", "Body: "+body)
+	d.opt("model", "Hero: "+modelNames[l.Model%len(modelNames)])
+	if l.Model%len(modelNames) == len(modelNames)-1 {
+		d.opt("sex", "Body: "+body)
+	}
 	d.opt("skin", "Skin: "+skinNames[l.Skin%len(skinNames)])
 	d.opt("hair", "Hair: "+hairNames[l.Hair%len(hairNames)])
 	d.opt("hcolor", "Hair color: "+hairColors[l.HairColor%len(hairColors)])

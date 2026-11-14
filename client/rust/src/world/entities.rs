@@ -33,6 +33,54 @@ void fragment() {
 }
 "#;
 
+/// Hero looks selectable in character creation; index 5 is the procedural one.
+pub const PLAYER_MODELS: [&str; 5] = ["Knight", "Barbarian", "Mage", "Rogue", "Rogue_Hooded"];
+
+/// Skeletal models for monster families (file, weapon, off-hand, dye).
+fn enemy_rig(e: &EnemyState) -> Option<(&'static str, &'static str, &'static str, Option<Color>)> {
+    let pick = (e.id as usize) % 4;
+    match e.kind.as_str() {
+        "skeleton" => Some(match (e.rank >= 3, pick) {
+            (true, _) => ("Skeleton_Warrior", "axe", "shield", None),
+            (_, 0) => ("Skeleton_Minion", "sword", "", None),
+            (_, 1) => ("Skeleton_Rogue", "dagger", "", None),
+            (_, 2) => ("Skeleton_Mage", "staff", "", None),
+            _ => ("Skeleton_Warrior", "sword", "shield", None),
+        }),
+        "ghoul" => Some((
+            "Skeleton_Minion",
+            "",
+            "",
+            Some(Color::from_rgb(0.62, 0.8, 0.5)),
+        )),
+        "bandit" => Some((
+            if pick % 2 == 0 {
+                "Rogue_Hooded"
+            } else {
+                "Rogue"
+            },
+            "dagger",
+            "",
+            Some(Color::from_rgb(1.0, 0.72, 0.65)),
+        )),
+        "cultist" => Some(("Mage", "staff", "", Some(Color::from_rgb(0.85, 0.35, 0.35)))),
+        _ => None,
+    }
+}
+
+/// Skeletal models for townsfolk roles.
+fn npc_rig(role: &str) -> Option<(&'static str, &'static str, &'static str)> {
+    match role {
+        "guard" | "quartermaster" | "king" => Some(("Knight", "sword", "shield")),
+        "blacksmith" => Some(("Barbarian", "axe", "")),
+        "enchanter" | "trainer" => Some(("Mage", "staff", "tome")),
+        "healer" => Some(("Mage", "wand", "")),
+        "exotic" | "merchant" => Some(("Rogue_Hooded", "dagger", "")),
+        "courtesan" => Some(("Rogue", "", "")),
+        _ => None,
+    }
+}
+
 pub const RANK_COLORS: [&str; 6] = [
     "#b0b0b0", "#ffd8d0", "#9ad0ff", "#ffd24a", "#ff8a2a", "#ff3a3a",
 ];
@@ -198,6 +246,13 @@ impl Actor {
             m.float + (self.t * 2.3).sin() * 0.12
         } else {
             0.0
+        };
+        // Skeletal characters play their own clips; procedural ones get poses.
+        let pose = if let Some(rig) = &mut m.rig {
+            super::rig::drive(rig, &mut m.clip, &self.anim, self.anim_t, speed);
+            None
+        } else {
+            pose
         };
         // Combat poses override the walk cycle.
         let (mut lift, mut pitch, mut twist) = (0.0, 0.0, 0.0);
@@ -482,7 +537,13 @@ impl Entities {
                 }
             }
             if !self.players.contains_key(&p.id) {
-                let model = models::humanoid(lib, &player_style(p, me));
+                let st = player_style(p, me);
+                let model = PLAYER_MODELS
+                    .get(p.look.model as usize)
+                    .and_then(|file| {
+                        super::rig::character(lib, file, &st.weapon, &st.offhand, None)
+                    })
+                    .unwrap_or_else(|| models::humanoid(lib, &st));
                 let label_color = if me {
                     Color::from_rgb(1.0, 0.92, 0.6)
                 } else {
@@ -539,7 +600,9 @@ impl Entities {
             seen.insert(e.id);
             if !self.enemies.contains_key(&e.id) {
                 let color = parse_color(&e.color);
-                let mut model = models::actor(&e.model, lib, &e.tex, color);
+                let mut model = enemy_rig(e)
+                    .and_then(|(file, w, o, dye)| super::rig::character(lib, file, w, o, dye))
+                    .unwrap_or_else(|| models::actor(&e.model, lib, &e.tex, color));
                 if !e.glow.is_empty() {
                     let glow = parse_color(&e.glow);
                     let mut l = models::light(glow, if e.rank >= 3 { 1.6 } else { 0.8 }, 3.5);
@@ -616,7 +679,9 @@ impl Entities {
             let model = if n.role == "board" {
                 notice_board(lib)
             } else {
-                models::humanoid(lib, &outfit_style(n))
+                npc_rig(&n.role)
+                    .and_then(|(file, w, o)| super::rig::character(lib, file, w, o, None))
+                    .unwrap_or_else(|| models::humanoid(lib, &outfit_style(n)))
             };
             let label = format!("{}\n<{}>", n.name, n.title);
             let mut a = self.spawn_actor(
@@ -869,16 +934,7 @@ fn notice_board(lib: &ContentLibrary) -> ActorModel {
             ),
         ));
     }
-    ActorModel {
-        root,
-        body: None,
-        weapon_pivot: None,
-        height: 2.0,
-        legs: Vec::new(),
-        arms: Vec::new(),
-        spin: Vec::new(),
-        wings: Vec::new(),
-        float: 0.0,
-        head: None,
-    }
+    let mut m = ActorModel::empty(2.0);
+    m.root.add_child(&root);
+    m
 }

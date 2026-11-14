@@ -191,6 +191,7 @@ pub struct Look {
     pub eyes: i32,
     pub female: bool,
     pub done: bool,
+    pub model: i32,
 }
 
 #[derive(Deserialize, Debug, Clone, Default)]

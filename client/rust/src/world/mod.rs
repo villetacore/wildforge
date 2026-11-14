@@ -9,6 +9,7 @@ pub mod environment;
 pub mod grade;
 pub mod models;
 pub mod resources;
+pub mod rig;
 pub mod structures;
 pub mod terrain;
 pub mod town;
