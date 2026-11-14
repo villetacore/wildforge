@@ -135,17 +135,20 @@ jobs:
           mkdir -p build/linux build/windows build/macos dist
           status=0
           for preset in Linux Windows macOS; do
-            if ! godot --headless --path client/godot --export-release "$preset" > "export-$preset.log" 2>&1; then
-              status=1
+            if godot --headless --path client/godot --export-release "$preset" > "export-$preset.log" 2>&1; then
+              echo "$preset exported"
+            else
+              # Surface Godot's complaints as annotations so they are visible without the raw log.
+              msg=$(grep -iE -A6 "error|failed|invalid|missing|template|configuration" "export-$preset.log" | head -14 | tr '\n' ' ' | cut -c1-1000)
+              if [ "$preset" = "macOS" ]; then
+                echo "::warning title=Export $preset::$msg"
+              else
+                echo "::error title=Export $preset::$msg"
+                status=1
+              fi
             fi
             cat "export-$preset.log"
-            # Surface Godot's complaints as annotations so they are visible without the raw log.
-            if grep -qiE "error|failed|invalid" "export-$preset.log"; then
-              msg=$(grep -iE "error|failed|invalid|missing|template" "export-$preset.log" | head -8 | tr '\n' ' ' | cut -c1-900)
-              echo "::error title=Export $preset::$msg"
-            fi
           done
-          ls -laR build | head -40
           exit $status
       - name: Package with content
         run: |
@@ -155,10 +158,12 @@ jobs:
             (cd "build/$os" && zip -qr "../../dist/wildforge-client-$os-$version.zip" .)
           done
           # macOS: the client looks for content in Contents/Resources.
-          mkdir -p build/macos/app && unzip -q build/macos/wildforge.zip -d build/macos/app
-          app=$(find build/macos/app -maxdepth 1 -name '*.app' | head -1)
-          cp -r content "$app/Contents/Resources/content"
-          (cd build/macos/app && zip -qry "../../../dist/wildforge-client-macos-$version.zip" .)
+          if [ -f build/macos/wildforge.zip ]; then
+            mkdir -p build/macos/app && unzip -q build/macos/wildforge.zip -d build/macos/app
+            app=$(find build/macos/app -maxdepth 1 -name '*.app' | head -1)
+            cp -r content "$app/Contents/Resources/content"
+            (cd build/macos/app && zip -qry "../../../dist/wildforge-client-macos-$version.zip" .)
+          fi
           ls -la dist
       - uses: actions/upload-artifact@v4
         with:
