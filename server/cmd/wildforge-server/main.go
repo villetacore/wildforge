@@ -53,8 +53,9 @@ func main() {
 
 	srv := &http.Server{Addr: cfg.Addr, Handler: mux}
 	go func() {
-		log.Printf("wildforge server on %s (ws path /ws) | content %s: %d items, %d resources, %d recipes, %d enemies | world %dx%d seed %d",
-			cfg.Addr, cfg.ContentDir, len(pack.Items), len(pack.Resources), len(pack.Recipes), len(pack.Enemies), w.Size, w.Size, cfg.Seed)
+		log.Printf("wildforge server on %s (ws path /ws) | content %s: %d items, %d resources, %d recipes, %d monster families, %d gear bases, %d spells, %d zones | world %dx%d seed %d, %d structures, %d NPC spots",
+			cfg.Addr, cfg.ContentDir, len(pack.Items), len(pack.Resources), len(pack.Recipes), len(pack.Bestiary.Families), len(pack.Gear.Bases),
+			len(pack.Spells), len(pack.Zones), w.Size, w.Size, cfg.Seed, len(w.Structures), len(w.NPCSpots))
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatal(err)
 		}

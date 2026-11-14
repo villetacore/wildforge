@@ -5,7 +5,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use godot::classes::base_material_3d::{Flags, TextureParam};
+use godot::classes::base_material_3d::{Feature, Flags, TextureFilter, TextureParam};
 use godot::classes::{Image, ImageTexture, Os, ProjectSettings, StandardMaterial3D, Texture2D};
 use godot::prelude::*;
 
@@ -44,6 +44,7 @@ pub fn find_content_dir() -> Option<PathBuf> {
 pub struct ContentLibrary {
     dir: Option<PathBuf>,
     textures: RefCell<HashMap<String, Option<Gd<Texture2D>>>>,
+    normals: RefCell<HashMap<String, Option<Gd<Texture2D>>>>,
     materials: RefCell<HashMap<String, Gd<StandardMaterial3D>>>,
     icons: RefCell<HashMap<String, Gd<Texture2D>>>,
 }
@@ -60,6 +61,7 @@ impl ContentLibrary {
         ContentLibrary {
             dir,
             textures: RefCell::default(),
+            normals: RefCell::default(),
             materials: RefCell::default(),
             icons: RefCell::default(),
         }
@@ -82,6 +84,24 @@ impl ContentLibrary {
         tex
     }
 
+    /// A normal map derived from the texture's brightness (cached).
+    pub fn normal_map(&self, name: &str) -> Option<Gd<Texture2D>> {
+        if let Some(t) = self.normals.borrow().get(name) {
+            return t.clone();
+        }
+        let tex = self.dir.as_ref().and_then(|d| {
+            let path = d.join("textures").join(format!("{name}.png"));
+            let mut img = Image::load_from_file(path.to_string_lossy().as_ref())?;
+            img.bump_map_to_normal_map_ex().bump_scale(3.0).done();
+            img.generate_mipmaps();
+            ImageTexture::create_from_image(&img).map(|t| t.upcast::<Texture2D>())
+        });
+        self.normals
+            .borrow_mut()
+            .insert(name.to_string(), tex.clone());
+        tex
+    }
+
     /// A lit material with an optional texture multiplied by `tint`.
     /// `uv_scale` repeats the texture; `vertex_color` multiplies by mesh colors.
     pub fn material(
@@ -98,15 +118,35 @@ impl ContentLibrary {
         let mut m = StandardMaterial3D::new_gd();
         m.set_albedo(tint);
         m.set_roughness(match texture {
-            "metal" => 0.65,
-            "slime" | "crystal" => 0.22,
-            _ => 0.9,
+            "metal" | "rusted_iron" => 0.45,
+            "steel" => 0.32,
+            "slime" | "crystal" | "ice" => 0.15,
+            "marble" => 0.35,
+            "water" => 0.1,
+            _ => 0.88,
         });
-        if texture == "metal" {
-            m.set_metallic(0.25);
+        if texture == "metal" || texture == "steel" {
+            m.set_metallic(if texture == "steel" { 0.75 } else { 0.55 });
+            m.set_specular(0.7);
         }
+        m.set_texture_filter(TextureFilter::LINEAR_WITH_MIPMAPS_ANISOTROPIC);
         if let Some(tex) = self.texture(texture) {
             m.set_texture(TextureParam::ALBEDO, &tex);
+            let bumpy = !matches!(
+                texture,
+                "slime" | "crystal" | "water" | "skin" | "window" | "lava"
+            );
+            if bumpy {
+                if let Some(n) = self.normal_map(texture) {
+                    m.set_feature(Feature::NORMAL_MAPPING, true);
+                    m.set_texture(TextureParam::NORMAL, &n);
+                    m.set_normal_scale(match texture {
+                        "cobble" | "stone_blocks" | "rocky" | "stone" | "bark" | "roof_tiles"
+                        | "slate" => 1.4,
+                        _ => 0.8,
+                    });
+                }
+            }
         }
         if uv_scale != 1.0 {
             m.set_uv1_scale(Vector3::new(uv_scale, uv_scale, uv_scale));
@@ -114,6 +154,24 @@ impl ContentLibrary {
         if vertex_color {
             m.set_flag(Flags::ALBEDO_FROM_VERTEX_COLOR, true);
         }
+        self.materials.borrow_mut().insert(key, m.clone());
+        m
+    }
+
+    /// Like `material`, but textured with world-space triplanar mapping so
+    /// large walls tile evenly instead of stretching one texture.
+    pub fn material_world(&self, texture: &str, tint: Color, scale: f32) -> Gd<StandardMaterial3D> {
+        let key = format!("world|{texture}|{}|{scale}", tint.to_html());
+        if let Some(m) = self.materials.borrow().get(&key) {
+            return m.clone();
+        }
+        let mut m = self
+            .material(texture, tint, 1.0, false)
+            .duplicate_resource();
+        m.set_flag(Flags::UV1_USE_TRIPLANAR, true);
+        m.set_flag(Flags::UV1_USE_WORLD_TRIPLANAR, true);
+        m.set_uv1_triplanar_blend_sharpness(4.0);
+        m.set_uv1_scale(Vector3::splat(scale));
         self.materials.borrow_mut().insert(key, m.clone());
         m
     }

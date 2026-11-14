@@ -6,19 +6,24 @@ use std::cell::RefCell;
 use std::collections::VecDeque;
 use std::rc::Rc;
 
-use godot::classes::{INode3D, InputEvent, InputEventMouseButton, Node3D};
+use godot::classes::input::MouseMode;
+use godot::classes::{
+    INode3D, Input, InputEvent, InputEventMouseButton, InputEventMouseMotion, Node3D,
+};
 use godot::global::MouseButton;
 use godot::prelude::*;
 use serde_json::json;
 
-use crate::content::ContentLibrary;
+use crate::content::{parse_color, ContentLibrary};
 use crate::input::{Command, InputState};
-use crate::net::{Catalog, Connection, NetEvent, ServerMsg};
+use crate::net::{Connection, NetEvent, ServerMsg};
 use crate::session::Session;
 use crate::ui::crafting::CraftingPanel;
+use crate::ui::dialog::DialogPanel;
 use crate::ui::hud::Hud;
 use crate::ui::login::LoginUi;
 use crate::ui::{escape, UiEvent, UiQueue};
+use crate::world::entities::{Pick, RANK_COLORS};
 use crate::world::WorldView;
 
 struct InGame {
@@ -26,6 +31,8 @@ struct InGame {
     world: WorldView,
     hud: Hud,
     crafting: CraftingPanel,
+    dialog: DialogPanel,
+    enemies: Vec<crate::net::protocol::EnemyState>,
 }
 
 #[derive(GodotClass)]
@@ -40,6 +47,20 @@ pub struct WildforgeGame {
     login: Option<LoginUi>,
     game: Option<InGame>,
     input: InputState,
+    dragging: bool,
+    drag_moved: f32,
+    press_pos: Vector2,
+    sent_dir: Vector2,
+    script: Option<Script>,
+}
+
+/// Dev/docs helper: WILDFORGE_SCRIPT=<file> runs simple commands once in game
+/// (wait s · shot path.png · chat text · yaw rad · pitch rad · zoom dist ·
+/// menu name · talk opt · move dx dy · target nearest · quit).
+struct Script {
+    lines: Vec<String>,
+    next: usize,
+    wait: f32,
 }
 
 #[godot_api]
@@ -55,6 +76,18 @@ impl INode3D for WildforgeGame {
             login: None,
             game: None,
             input: InputState::default(),
+            dragging: false,
+            drag_moved: 0.0,
+            press_pos: Vector2::ZERO,
+            sent_dir: Vector2::ZERO,
+            script: std::env::var("WILDFORGE_SCRIPT")
+                .ok()
+                .and_then(|p| std::fs::read_to_string(p).ok())
+                .map(|t| Script {
+                    lines: t.lines().map(str::to_string).collect(),
+                    next: 0,
+                    wait: 0.0,
+                }),
         }
     }
 
@@ -83,22 +116,65 @@ impl INode3D for WildforgeGame {
         self.poll_network();
         self.drain_ui();
         self.handle_input(delta);
+        self.run_script(delta);
         if let (Some(g), Some(lib)) = (&mut self.game, &self.lib) {
-            g.world.update(delta, g.session.my_id);
-            g.hud.update(&g.session, lib);
+            g.world.update(delta, &g.session);
+            g.hud.update(&g.session, lib, g.world.camera.yaw);
             g.crafting.update(&g.session, lib);
         }
     }
 
+    fn exit_tree(&mut self) {
+        // Cached meshes must be released while the engine is still alive.
+        crate::world::models::clear_cache();
+    }
+
     fn unhandled_input(&mut self, event: Gd<InputEvent>) {
-        let Some(g) = &mut self.game else { return };
-        if let Ok(mb) = event.try_cast::<InputEventMouseButton>() {
-            if mb.is_pressed() {
-                match mb.get_button_index() {
-                    MouseButton::WHEEL_UP => g.world.camera.zoom(-1.0),
-                    MouseButton::WHEEL_DOWN => g.world.camera.zoom(1.0),
-                    _ => {}
+        if self.game.is_none() {
+            return;
+        }
+        if let Ok(mb) = event.clone().try_cast::<InputEventMouseButton>() {
+            let pressed = mb.is_pressed();
+            match mb.get_button_index() {
+                MouseButton::WHEEL_UP if pressed => {
+                    self.game.as_mut().unwrap().world.camera.zoom(-1.0)
                 }
+                MouseButton::WHEEL_DOWN if pressed => {
+                    self.game.as_mut().unwrap().world.camera.zoom(1.0)
+                }
+                MouseButton::RIGHT | MouseButton::MIDDLE => {
+                    self.dragging = pressed;
+                    Input::singleton().set_mouse_mode(if pressed {
+                        MouseMode::CAPTURED
+                    } else {
+                        MouseMode::VISIBLE
+                    });
+                    if !pressed {
+                        Input::singleton().warp_mouse(self.press_pos);
+                    } else {
+                        self.press_pos = mb.get_position();
+                    }
+                }
+                MouseButton::LEFT => {
+                    if pressed {
+                        self.press_pos = mb.get_position();
+                        self.drag_moved = 0.0;
+                    } else if self.drag_moved < 6.0 {
+                        self.click(mb.get_position());
+                    }
+                }
+                _ => {}
+            }
+        } else if let Ok(mm) = event.try_cast::<InputEventMouseMotion>() {
+            let rel = mm.get_relative();
+            self.drag_moved += rel.length();
+            if self.dragging {
+                self.game
+                    .as_mut()
+                    .unwrap()
+                    .world
+                    .camera
+                    .rotate(rel.x, rel.y);
             }
         }
     }
@@ -113,6 +189,7 @@ impl WildforgeGame {
             layer.queue_free();
             g.world.destroy();
         }
+        Input::singleton().set_mouse_mode(MouseMode::VISIBLE);
         if self.login.is_none() {
             let login = LoginUi::build(&self.queue);
             self.base_mut().add_child(&login.layer);
@@ -132,12 +209,15 @@ impl WildforgeGame {
         let mut hud = Hud::build(&self.queue, session.minimap_texture());
         let crafting = CraftingPanel::build(&mut hud.layer, &self.queue);
         crafting.connect(&self.queue, &session);
+        let dialog = DialogPanel::build(&mut hud.layer, &self.queue);
         self.base_mut().add_child(&hud.layer);
         self.game = Some(InGame {
             session,
             world,
             hud,
             crafting,
+            dialog,
+            enemies: Vec::new(),
         });
     }
 
@@ -150,6 +230,77 @@ impl WildforgeGame {
     fn chat_line(&mut self, bbcode: &str) {
         if let Some(g) = &mut self.game {
             g.hud.chat_line(bbcode);
+        }
+    }
+
+    /// Left click in the world: select an enemy (and attack it if it was
+    /// already selected) or talk to an NPC.
+    fn click(&mut self, pos: Vector2) {
+        let Some(g) = &mut self.game else { return };
+        let cam = g.world.camera.cam.clone();
+        match g.world.entities.pick(&cam, pos) {
+            Some(Pick::Enemy(id)) => {
+                let again = g.world.entities.target == id;
+                g.world.entities.target = id;
+                self.send(json!({ "t": "target", "target": id }));
+                if again {
+                    self.send(json!({ "t": "attack" }));
+                }
+            }
+            Some(Pick::Npc(id)) => self.send(json!({ "t": "target", "target": id })),
+            _ => {}
+        }
+    }
+
+    fn run_script(&mut self, delta: f32) {
+        if self.game.is_none() {
+            return;
+        }
+        let Some(sc) = &mut self.script else { return };
+        if sc.wait > 0.0 {
+            sc.wait -= delta;
+            return;
+        }
+        let Some(line) = sc.lines.get(sc.next).cloned() else {
+            return;
+        };
+        sc.next += 1;
+        let (cmd, arg) = line.trim().split_once(' ').unwrap_or((line.trim(), ""));
+        let num = |i: usize| {
+            arg.split_whitespace()
+                .nth(i)
+                .and_then(|v| v.parse::<f32>().ok())
+                .unwrap_or(0.0)
+        };
+        match cmd {
+            "wait" => sc.wait = num(0),
+            "shot" => {
+                if let Some(img) = self
+                    .base()
+                    .get_viewport()
+                    .and_then(|v| v.get_texture())
+                    .and_then(|t| t.get_image())
+                {
+                    img.save_png(arg);
+                    godot_print!("wildforge: screenshot {arg}");
+                }
+            }
+            "chat" => self.send(json!({ "t": "chat", "text": arg })),
+            "menu" => self.send(json!({ "t": "menu", "menu": arg })),
+            "talk" => self.talk(arg, None),
+            "move" => {
+                self.send(json!({ "t": "move", "dx": num(0), "dy": num(1) }));
+            }
+            "target" => self.next_target(),
+            "yaw" | "pitch" | "zoom" => {
+                if let Some(g) = &mut self.game {
+                    g.world.camera.set_view(cmd, num(0));
+                }
+            }
+            "quit" => {
+                self.base().get_tree().quit();
+            }
+            _ => {}
         }
     }
 
@@ -220,20 +371,11 @@ impl WildforgeGame {
                     self.set_status(&message, true);
                 }
             }
-            ServerMsg::Welcome {
-                id,
-                name,
-                size,
-                terrain,
-                heights,
-                nodes,
-                depleted,
-                content,
-            } => {
+            ServerMsg::Welcome(w) => {
                 if self.game.is_none() {
-                    let mut session =
-                        Session::new(id, name, Catalog::new(content), size, &terrain, &nodes);
-                    session.heights = heights;
+                    self.set_status("Building the world...", false);
+                    let depleted = w.depleted.clone();
+                    let session = Session::new(*w);
                     self.start_game(session, depleted);
                 }
             }
@@ -241,24 +383,69 @@ impl WildforgeGame {
                 you,
                 players,
                 enemies,
+                pets,
                 items,
                 fx,
             } => {
                 let (Some(g), Some(lib)) = (&mut self.game, &self.lib) else {
                     return;
                 };
-                g.session.you = you;
+                g.session.set_you(*you);
+                g.world.entities.target = g.session.you.target;
                 let cat = &g.session.catalog;
                 g.world
                     .entities
                     .sync_players(&players, g.session.my_id, cat, lib);
-                g.world.entities.sync_enemies(&enemies, cat, lib);
+                g.world.entities.sync_enemies(&enemies, lib);
+                g.world.entities.sync_pets(&pets, lib);
                 g.world.entities.sync_items(&items, cat, lib);
                 g.world.play_fx(&fx, cat);
+                let target = enemies
+                    .iter()
+                    .find(|e| e.id == g.session.you.target)
+                    .map(|e| {
+                        (
+                            format!("{} — level {}", e.name, e.level),
+                            e.hp,
+                            e.max_hp,
+                            parse_color(RANK_COLORS[e.rank.clamp(0, 5) as usize]),
+                        )
+                    });
+                g.hud.set_target(target);
+                g.enemies = enemies;
             }
             ServerMsg::Node { i, alive } => {
                 if let Some(g) = &mut self.game {
                     g.world.set_node_alive(i, alive);
+                }
+            }
+            ServerMsg::Dungeon {
+                index,
+                x,
+                y,
+                size,
+                terrain,
+                portals,
+            } => {
+                if let (Some(g), Some(lib)) = (&mut self.game, &self.lib) {
+                    g.session.apply_dungeon(x, y, size, &terrain, portals);
+                    g.world.rebuild_dungeon(
+                        index,
+                        g.session.size,
+                        &g.session.terrain,
+                        &g.session.portals,
+                        lib,
+                    );
+                }
+            }
+            ServerMsg::Dialog(d) => {
+                if let Some(g) = &mut self.game {
+                    g.dialog.show(&d);
+                }
+            }
+            ServerMsg::DialogClose => {
+                if let Some(g) = &mut self.game {
+                    g.dialog.hide();
                 }
             }
             ServerMsg::Chat { from, text } => {
@@ -280,15 +467,23 @@ impl WildforgeGame {
                 self.chat_line(&line);
             }
             ServerMsg::Died { lost_gold } => {
-                self.chat_line(&format!(
-                    "[color=#ff5544]You died and lost {lost_gold} gold. Respawned in town.[/color]"
-                ));
+                self.chat_line(&format!("[color=#ff5544]You died and lost {lost_gold} gold. Respawned in Velhrad.[/color]"));
             }
             ServerMsg::Unknown => {}
         }
     }
 
     // ----------------------------------------------------------- ui/input
+
+    fn talk(&mut self, opt: &str, text: Option<String>) {
+        let Some(g) = &self.game else { return };
+        let (npc, menu) = (g.dialog.npc, g.dialog.menu.clone());
+        let mut msg = json!({ "t": "talk", "npc": npc, "opt": opt, "menu": menu });
+        if let Some(t) = text {
+            msg["text"] = json!(t);
+        }
+        self.send(msg);
+    }
 
     fn drain_ui(&mut self) {
         loop {
@@ -321,31 +516,111 @@ impl WildforgeGame {
                         g.crafting.toggle();
                     }
                 }
+                UiEvent::Cast(i) => self.send(json!({ "t": "cast", "spell": i })),
+                UiEvent::Menu(m) => self.send(json!({ "t": "menu", "menu": m })),
+                UiEvent::DialogOption(id) => self.talk(&id, None),
+                UiEvent::DialogSubmit(text) => {
+                    self.talk("submit", Some(text));
+                    self.input.chat_block = 0.2;
+                }
+                UiEvent::DialogClose => {
+                    if let Some(g) = &mut self.game {
+                        g.dialog.hide();
+                    }
+                    self.send(json!({ "t": "close" }));
+                }
             }
         }
     }
 
+    fn next_target(&mut self) {
+        let Some(g) = &mut self.game else { return };
+        let me = (g.session.you.x, g.session.you.y);
+        let mut list: Vec<(f32, i64)> = g
+            .enemies
+            .iter()
+            .map(|e| (((e.x - me.0).powi(2) + (e.y - me.1).powi(2)).sqrt(), e.id))
+            .filter(|(d, _)| *d < 20.0)
+            .collect();
+        list.sort_by(|a, b| a.0.total_cmp(&b.0));
+        if list.is_empty() {
+            return;
+        }
+        let cur = list
+            .iter()
+            .position(|(_, id)| *id == g.world.entities.target);
+        let next = list[cur.map(|i| (i + 1) % list.len()).unwrap_or(0)].1;
+        g.world.entities.target = next;
+        self.send(json!({ "t": "target", "target": next }));
+    }
+
     fn handle_input(&mut self, delta: f32) {
         let Some(g) = &mut self.game else { return };
-        let commands = if g.hud.chat_focused() {
-            let godot_input = godot::classes::Input::singleton();
+        let typing = g.hud.chat_focused() || g.dialog.prompt_focused();
+        let commands: Vec<Command> = if typing {
+            let godot_input = Input::singleton();
             if godot_input.is_physical_key_pressed(godot::global::Key::ESCAPE) {
                 g.hud.chat_input.release_focus();
+                g.dialog.prompt.release_focus();
             }
             self.input.release().into_iter().collect()
         } else {
             self.input.poll(delta)
         };
+        // Camera-relative movement, re-sent when the camera turns.
+        let (right, fwd) = self.input.direction();
+        let (f, r) = g.world.camera.basis_2d();
+        let mut dir = f * fwd as f32 + r * right as f32;
+        if dir.length() > 0.01 {
+            dir = dir.normalized();
+        }
+        let changed = (dir - self.sent_dir).length() > 0.06
+            || (dir.length() < 0.01) != (self.sent_dir.length() < 0.01);
+        if changed {
+            self.sent_dir = dir;
+            self.send(json!({ "t": "move", "dx": dir.x, "dy": dir.y }));
+        }
         for c in commands {
             let msg = match c {
-                Command::Move(dx, dy) => json!({ "t": "move", "dx": dx, "dy": dy }),
+                Command::Move => continue,
                 Command::Attack => json!({ "t": "attack" }),
                 Command::Gather => json!({ "t": "gather" }),
                 Command::Potion => json!({ "t": "potion" }),
+                Command::Tame => json!({ "t": "tame" }),
                 Command::UseSlot(i) => json!({ "t": "use", "index": i }),
+                Command::Cast(i) => json!({ "t": "cast", "spell": i }),
+                Command::Menu(m) => json!({ "t": "menu", "menu": m }),
+                Command::NextTarget => {
+                    self.next_target();
+                    continue;
+                }
                 Command::ToggleCrafting => {
                     if let Some(g) = &mut self.game {
                         g.crafting.toggle();
+                    }
+                    continue;
+                }
+                Command::ToggleInventory => {
+                    if let Some(g) = &mut self.game {
+                        g.hud.toggle_inventory();
+                    }
+                    continue;
+                }
+                Command::ToggleMap => {
+                    if let Some(g) = &mut self.game {
+                        g.hud.toggle_map();
+                    }
+                    continue;
+                }
+                Command::Escape => {
+                    if let Some(g) = &mut self.game {
+                        if g.dialog.visible() {
+                            g.dialog.hide();
+                            self.send(json!({ "t": "close" }));
+                        } else if !g.hud.close_map() {
+                            g.world.entities.target = 0;
+                            self.send(json!({ "t": "target", "target": 0 }));
+                        }
                     }
                     continue;
                 }

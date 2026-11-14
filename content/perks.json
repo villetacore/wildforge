@@ -1,0 +1,52 @@
+{
+  "trees": [
+    { "id": "warrior",     "name": "Warrior",     "color": "#e06a4a" },
+    { "id": "rogue",       "name": "Rogue",       "color": "#7ad07a" },
+    { "id": "mage",        "name": "Mage",        "color": "#7a9aff" },
+    { "id": "survivor",    "name": "Survivor",    "color": "#d0b070" },
+    { "id": "beastmaster", "name": "Beastmaster", "color": "#c08a4a" },
+    { "id": "social", "name": "Silver Tongue", "color": "#ff8ad0" }
+  ],
+  "perks": [
+    { "id": "might",        "tree": "warrior", "tier": 1, "name": "Might",          "desc": "+10% attack.",                          "stats": { "atk_pct": 10 } },
+    { "id": "toughness",    "tree": "warrior", "tier": 1, "name": "Toughness",      "desc": "+12% max health.",                      "stats": { "hp_pct": 12 } },
+    { "id": "iron_skin",    "tree": "warrior", "tier": 2, "name": "Iron Skin",      "desc": "+4 defense.",                           "stats": { "def": 4 } },
+    { "id": "cleave",       "tree": "warrior", "tier": 2, "name": "Cleave",         "desc": "Melee attacks also hit 2 nearby enemies for half damage.", "stats": { "cleave": 2 } },
+    { "id": "bloodlust",    "tree": "warrior", "tier": 3, "name": "Bloodlust",      "desc": "Heal for 6% of melee damage dealt.",    "stats": { "lifesteal": 6 } },
+    { "id": "juggernaut",   "tree": "warrior", "tier": 4, "name": "Juggernaut",     "desc": "+20% max health, +6 defense.",          "stats": { "hp_pct": 20, "def": 6 } },
+
+    { "id": "precision",    "tree": "rogue",   "tier": 1, "name": "Precision",      "desc": "+6% critical chance.",                  "stats": { "crit": 6 } },
+    { "id": "fleet_foot",   "tree": "rogue",   "tier": 1, "name": "Fleet Foot",     "desc": "+10% movement speed.",                  "stats": { "speed": 10 } },
+    { "id": "evasion",      "tree": "rogue",   "tier": 2, "name": "Evasion",        "desc": "10% chance to dodge attacks.",          "stats": { "dodge": 10 } },
+    { "id": "deadly",       "tree": "rogue",   "tier": 2, "name": "Deadly Strikes", "desc": "Critical hits deal 2.6x instead of 2x.", "stats": { "crit_mult": 0.6 } },
+    { "id": "envenom",      "tree": "rogue",   "tier": 3, "name": "Envenom",        "desc": "Melee hits have 25% chance to poison.", "stats": { "poison_hit": 25 } },
+    { "id": "assassin",     "tree": "rogue",   "tier": 4, "name": "Assassin",       "desc": "+12% crit, +15% attack against full-health foes.", "stats": { "crit": 12, "opener": 15 } },
+
+    { "id": "arcane_mind",  "tree": "mage",    "tier": 1, "name": "Arcane Mind",    "desc": "+25% max mana.",                        "stats": { "mana_pct": 25 } },
+    { "id": "spellweaver",  "tree": "mage",    "tier": 1, "name": "Spellweaver",    "desc": "+15% spell power.",                     "stats": { "sp_pct": 15 } },
+    { "id": "mana_flow",    "tree": "mage",    "tier": 2, "name": "Mana Flow",      "desc": "+60% mana regeneration.",               "stats": { "mana_regen_pct": 60 } },
+    { "id": "quick_cast",   "tree": "mage",    "tier": 2, "name": "Quick Cast",     "desc": "Spell cooldowns 15% shorter.",          "stats": { "cdr": 15 } },
+    { "id": "elementalist", "tree": "mage",    "tier": 3, "name": "Elementalist",   "desc": "Statuses from your spells always apply.", "stats": { "spell_status": 100 } },
+    { "id": "archmage",     "tree": "mage",    "tier": 4, "name": "Archmage",       "desc": "+30% spell power, +20% max mana.",      "stats": { "sp_pct": 30, "mana_pct": 20 } },
+
+    { "id": "herbalist",    "tree": "survivor","tier": 1, "name": "Herbalist",      "desc": "Potions heal 50% more.",                "stats": { "potion": 50 } },
+    { "id": "scavenger",    "tree": "survivor","tier": 1, "name": "Scavenger",      "desc": "+25% gold from enemies.",               "stats": { "gold": 25 } },
+    { "id": "second_wind",  "tree": "survivor","tier": 2, "name": "Second Wind",    "desc": "Health regenerates even in combat.",    "stats": { "combat_regen": 1, "regen": 1 } },
+    { "id": "thick_blood",  "tree": "survivor","tier": 2, "name": "Thick Blood",    "desc": "70% resistance to diseases.",           "stats": { "disease_resist": 70 } },
+    { "id": "treasure_hunter","tree": "survivor","tier": 3, "name": "Treasure Hunter","desc": "+30% magic find.",                   "stats": { "mf": 30 } },
+    { "id": "undying",      "tree": "survivor","tier": 4, "name": "Undying",        "desc": "Lose no gold on death, +2 regen.",      "stats": { "no_death_penalty": 1, "regen": 2 } },
+
+    { "id": "pet_bond",     "tree": "beastmaster","tier": 1, "name": "Bond",        "desc": "Pets deal 25% more damage.",            "stats": { "pet": 25 } },
+    { "id": "tamer",        "tree": "beastmaster","tier": 1, "name": "Tamer",       "desc": "Tame beasts up to 3 levels above you and at 40% health.", "stats": { "tame": 1 } },
+    { "id": "pack_leader",  "tree": "beastmaster","tier": 2, "name": "Pack Leader", "desc": "Pets have 40% more health.",            "stats": { "pet_hp": 40 } },
+    { "id": "feral_spirit", "tree": "beastmaster","tier": 3, "name": "Feral Spirit","desc": "Pets heal you for 20% of their damage.", "stats": { "pet_leech": 20 } },
+    { "id": "alpha",        "tree": "beastmaster","tier": 4, "name": "Alpha",       "desc": "Pets deal 50% more damage and gain double experience.", "stats": { "pet": 50, "pet_xp": 100 } },
+
+    { "id": "haggler",      "tree": "social","tier": 1, "name": "Haggler",     "desc": "Shop prices 12% lower, sell prices 12% higher.", "stats": { "price": 12 } },
+    { "id": "charmer",      "tree": "social","tier": 1, "name": "Charmer",     "desc": "Courtesans like you. Nights are cheaper and less risky.", "stats": { "charm": 1 } },
+    { "id": "diplomat",     "tree": "social","tier": 2, "name": "Diplomat",    "desc": "+30% reputation gains.",                "stats": { "rep": 30 } },
+    { "id": "bard",         "tree": "social","tier": 2, "name": "Tavern Bard", "desc": "Mood decays half as fast; +5% XP.",     "stats": { "mood_keep": 50, "xp": 5 } },
+    { "id": "contractor",   "tree": "social","tier": 3, "name": "Contractor",  "desc": "Contracts pay 40% more gold.",          "stats": { "contract": 40 } },
+    { "id": "legend",       "tree": "social","tier": 4, "name": "Living Legend","desc": "+15% XP, +20% reputation gains.",      "stats": { "xp": 15, "rep": 20 } }
+  ]
+}

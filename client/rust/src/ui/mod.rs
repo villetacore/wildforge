@@ -3,6 +3,7 @@
 //! never calls back into game logic directly.
 
 pub mod crafting;
+pub mod dialog;
 pub mod hud;
 pub mod login;
 
@@ -20,10 +21,15 @@ pub enum UiEvent {
     Chat(String),
     UseItem(i64),
     DropItem(i64),
-    Unequip(&'static str),
+    Unequip(String),
     Craft(String),
     CraftSelected,
     ToggleCrafting,
+    Cast(usize),
+    Menu(&'static str),
+    DialogOption(String),
+    DialogSubmit(String),
+    DialogClose,
 }
 
 pub type UiQueue = Rc<RefCell<VecDeque<UiEvent>>>;
@@ -38,11 +44,13 @@ pub const SCREEN_H: f32 = 720.0;
 pub fn panel(pos: Vector2, size: Vector2, alpha: f32) -> Gd<PanelContainer> {
     let mut p = PanelContainer::new_alloc();
     let mut style = StyleBoxFlat::new_gd();
-    style.set_bg_color(Color::from_rgba(0.08, 0.065, 0.055, alpha));
-    style.set_corner_radius_all(4);
+    style.set_bg_color(Color::from_rgba(0.07, 0.055, 0.045, alpha));
+    style.set_corner_radius_all(6);
     style.set_content_margin_all(10.0);
-    style.set_border_width_all(1);
-    style.set_border_color(Color::from_rgba(0.73, 0.54, 0.29, 0.85));
+    style.set_border_width_all(2);
+    style.set_border_color(Color::from_rgba(0.73, 0.54, 0.29, 0.9));
+    style.set_shadow_color(Color::from_rgba(0.0, 0.0, 0.0, 0.45));
+    style.set_shadow_size(6);
     p.add_theme_stylebox_override("panel", &style);
     p.set_position(pos);
     p.set_size(size);

@@ -1,0 +1,21 @@
+{
+  "pets": [
+    { "id": "wolf_pup",   "name": "Wolf Pup",   "model": "wolf",      "texture": "fur",     "color": "#9a9aa6", "scale": 0.6,  "hp": 40, "dmg": 4, "speed": 6.0, "ability": "rend",    "desc": "A loyal pup. Its bites make enemies bleed." },
+    { "id": "black_cat",  "name": "Black Cat",  "model": "cat",       "texture": "fur",     "color": "#2a2a30", "scale": 0.5,  "hp": 30, "dmg": 3, "speed": 6.5, "ability": "luck",    "desc": "Brings luck to its owner (+magic find)." },
+    { "id": "raven",      "name": "Raven",      "model": "bird",      "texture": "fur",     "color": "#1c1c24", "scale": 0.55, "hp": 25, "dmg": 4, "speed": 7.0, "fly": true, "ability": "peck", "desc": "A clever bird that pecks out eyes." },
+    { "id": "piglet",     "name": "Boar Piglet","model": "boar",      "texture": "fur",     "color": "#c08a7a", "scale": 0.55, "hp": 55, "dmg": 3, "speed": 5.5, "ability": "taunt",   "desc": "Tough little thing. Draws enemies' attention." },
+    { "id": "baby_drake", "name": "Baby Drake", "model": "drake",     "texture": "skin",    "color": "#c0502a", "scale": 0.55, "hp": 50, "dmg": 7, "speed": 6.0, "ability": "firebreath", "desc": "Breathes small but enthusiastic flames." },
+    { "id": "vintokryl",  "name": "Vintokryly Pizdokryl", "model": "vintokryl", "texture": "metal", "color": "#e0b040", "scale": 0.8, "hp": 60, "dmg": 8, "speed": 7.5, "fly": true, "ability": "rotor_gust",
+      "desc": "A propeller-winged abomination of unknown origin. Whirrs. Swears. Shreds everything in a circle around it." }
+  ],
+  "abilities": [
+    { "id": "rend",        "name": "Rend",        "cd": 6,  "status": "bleed",  "power": 1.0 },
+    { "id": "luck",        "name": "Lucky Charm", "cd": 0,  "mf": 20 },
+    { "id": "peck",        "name": "Peck",        "cd": 5,  "status": "weaken", "power": 1.2 },
+    { "id": "taunt",       "name": "Taunt",       "cd": 8,  "taunt": true },
+    { "id": "firebreath",  "name": "Fire Breath", "cd": 7,  "status": "burn",   "power": 1.8, "radius": 2.0 },
+    { "id": "rotor_gust",  "name": "Rotor Gust",  "cd": 5,  "status": "bleed",  "power": 2.2, "radius": 3.0 },
+    { "id": "maul",        "name": "Maul",        "cd": 6,  "status": "stun",   "power": 1.5 },
+    { "id": "venom",       "name": "Venom Bite",  "cd": 5,  "status": "poison", "power": 1.2 }
+  ]
+}

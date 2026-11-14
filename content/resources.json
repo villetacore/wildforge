@@ -2,21 +2,76 @@
   {
     "id": "crystal", "name": "Crystal Cluster", "item": "crystal", "tool": "pickaxe", "min_tier": 2,
     "charges": 2, "respawn": 180, "model": "crystal", "texture": "crystal", "color": "#7fe3ff",
-    "min_distance": 0.55, "spawn": [ { "terrain": "rocky", "chance": 0.05 } ]
+    "min_distance": 0.3, "spawn": [ { "terrain": "rocky", "chance": 0.04 }, { "terrain": "snow", "chance": 0.006 } ]
+  },
+  {
+    "id": "adamant", "name": "Adamantite Vein", "item": "adamant_ore", "tool": "pickaxe", "min_tier": 3,
+    "charges": 2, "respawn": 240, "model": "ore", "texture": "iron_ore", "color": "#5ad08a",
+    "min_distance": 0.0, "zones": ["ash"], "spawn": [ { "terrain": "rocky", "chance": 0.05 }, { "terrain": "ash", "chance": 0.006 } ]
+  },
+  {
+    "id": "mithril", "name": "Mithril Vein", "item": "mithril_ore", "tool": "pickaxe", "min_tier": 2,
+    "charges": 2, "respawn": 200, "model": "ore", "texture": "iron_ore", "color": "#9fe3ff",
+    "min_distance": 0.0, "zones": ["peaks"], "spawn": [ { "terrain": "rocky", "chance": 0.06 }, { "terrain": "snow", "chance": 0.004 } ]
+  },
+  {
+    "id": "silver", "name": "Silver Vein", "item": "silver_ore", "tool": "pickaxe", "min_tier": 2,
+    "charges": 3, "respawn": 160, "model": "ore", "texture": "iron_ore", "color": "#e8f0ff",
+    "min_distance": 0.0, "zones": ["dunes", "peaks"], "spawn": [ { "terrain": "rocky", "chance": 0.05 }, { "terrain": "sand", "chance": 0.002 } ]
   },
   {
     "id": "iron", "name": "Iron Vein", "item": "iron_ore", "tool": "pickaxe", "min_tier": 1,
     "charges": 3, "respawn": 120, "model": "ore", "texture": "iron_ore", "color": "#c8703a",
-    "min_distance": 0.25, "spawn": [ { "terrain": "rocky", "chance": 0.09 } ]
+    "min_distance": 0.0, "spawn": [ { "terrain": "rocky", "chance": 0.08 } ]
+  },
+  {
+    "id": "copper", "name": "Copper Vein", "item": "copper_ore", "tool": "pickaxe", "min_tier": 1,
+    "charges": 3, "respawn": 100, "model": "ore", "texture": "iron_ore", "color": "#e08a4a",
+    "min_distance": 0.0, "zones": ["vale", "weald", "mire"], "spawn": [ { "terrain": "rocky", "chance": 0.1 }, { "terrain": "grass", "chance": 0.002 } ]
   },
   {
     "id": "rock", "name": "Rock", "item": "stone", "tool": "pickaxe", "min_tier": 1,
     "charges": 3, "respawn": 90, "model": "rock", "texture": "stone", "color": "#9a9a9a",
-    "min_distance": 0.0, "spawn": [ { "terrain": "rocky", "chance": 0.3 }, { "terrain": "grass", "chance": 0.006 } ]
+    "min_distance": 0.0, "spawn": [ { "terrain": "rocky", "chance": 0.25 }, { "terrain": "grass", "chance": 0.005 }, { "terrain": "snow", "chance": 0.01 }, { "terrain": "ash", "chance": 0.02 }, { "terrain": "sand", "chance": 0.004 } ]
+  },
+  {
+    "id": "herb", "name": "Bloodmoss", "item": "herb", "tool": "", "min_tier": 0,
+    "charges": 1, "respawn": 120, "model": "herb", "texture": "leaves", "color": "#c04a6a",
+    "min_distance": 0.0, "spawn": [ { "terrain": "grass", "chance": 0.006 }, { "terrain": "forest", "chance": 0.012 }, { "terrain": "swamp", "chance": 0.02 } ]
+  },
+  {
+    "id": "elder", "name": "Elder Pine", "item": "elderwood", "tool": "axe", "min_tier": 3,
+    "charges": 3, "respawn": 200, "model": "pine", "texture": "bark", "color": "#c9e0a0",
+    "min_distance": 0.0, "zones": ["peaks"], "spawn": [ { "terrain": "snow", "chance": 0.01 } ]
+  },
+  {
+    "id": "pine", "name": "Snow Pine", "item": "wood", "tool": "axe", "min_tier": 0,
+    "charges": 4, "respawn": 70, "model": "pine", "texture": "bark", "color": "#2a4a3a",
+    "min_distance": 0.0, "spawn": [ { "terrain": "snow", "chance": 0.07 } ]
+  },
+  {
+    "id": "yew", "name": "Yew Tree", "item": "yew_wood", "tool": "axe", "min_tier": 2,
+    "charges": 3, "respawn": 120, "model": "tree", "texture": "bark", "color": "#1f4a2a",
+    "min_distance": 0.0, "zones": ["weald"], "spawn": [ { "terrain": "forest", "chance": 0.05 } ]
+  },
+  {
+    "id": "mangrove", "name": "Drowned Tree", "item": "ironwood", "tool": "axe", "min_tier": 2,
+    "charges": 3, "respawn": 140, "model": "deadtree", "texture": "bark", "color": "#4a5a3a",
+    "min_distance": 0.0, "spawn": [ { "terrain": "swamp", "chance": 0.06 } ]
+  },
+  {
+    "id": "deadtree", "name": "Charred Tree", "item": "wood", "tool": "axe", "min_tier": 0,
+    "charges": 3, "respawn": 80, "model": "deadtree", "texture": "bark", "color": "#2a2420",
+    "min_distance": 0.0, "spawn": [ { "terrain": "ash", "chance": 0.03 } ]
+  },
+  {
+    "id": "palm", "name": "Palm", "item": "wood", "tool": "axe", "min_tier": 0,
+    "charges": 3, "respawn": 80, "model": "palm", "texture": "bark", "color": "#4a8a3a",
+    "min_distance": 0.0, "zones": ["dunes"], "spawn": [ { "terrain": "sand", "chance": 0.008 }, { "terrain": "grass", "chance": 0.03 } ]
   },
   {
     "id": "tree", "name": "Tree", "item": "wood", "tool": "axe", "min_tier": 0,
     "charges": 4, "respawn": 60, "model": "tree", "texture": "bark", "color": "#2f6b2a",
-    "min_distance": 0.0, "spawn": [ { "terrain": "forest", "chance": 0.4 }, { "terrain": "grass", "chance": 0.025 } ]
+    "min_distance": 0.0, "spawn": [ { "terrain": "forest", "chance": 0.35 }, { "terrain": "grass", "chance": 0.02 } ]
   }
 ]

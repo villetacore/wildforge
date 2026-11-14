@@ -1,4 +1,5 @@
 //! Keyboard handling: turns key state into game commands each frame.
+//! Movement is relative to the camera; the app rotates it into world space.
 
 use std::collections::HashSet;
 
@@ -7,12 +8,20 @@ use godot::global::Key;
 use godot::prelude::*;
 
 pub enum Command {
-    Move(i32, i32),
+    /// Movement keys changed; the app reads `direction()` every frame.
+    Move,
     Attack,
     Gather,
     Potion,
+    Tame,
     UseSlot(usize),
+    Cast(usize),
+    Menu(&'static str),
     ToggleCrafting,
+    ToggleInventory,
+    ToggleMap,
+    NextTarget,
+    Escape,
     FocusChat,
 }
 
@@ -25,6 +34,8 @@ pub struct InputState {
     /// Blocks re-opening chat on the same Enter press that sent a message.
     pub chat_block: f32,
 }
+
+pub const SPELL_KEYS: [Key; 6] = [Key::R, Key::F, Key::G, Key::T, Key::Z, Key::X];
 
 impl InputState {
     fn just_pressed(&mut self, input: &Gd<Input>, key: Key) -> bool {
@@ -42,9 +53,14 @@ impl InputState {
         self.down.clear();
         if self.last_dir != (0, 0) {
             self.last_dir = (0, 0);
-            return Some(Command::Move(0, 0));
+            return Some(Command::Move);
         }
         None
+    }
+
+    /// The held movement keys as (right, forward).
+    pub fn direction(&self) -> (i32, i32) {
+        self.last_dir
     }
 
     pub fn poll(&mut self, delta: f32) -> Vec<Command> {
@@ -59,27 +75,46 @@ impl InputState {
             out.push(Command::FocusChat);
             return out;
         }
+        if self.just_pressed(&input, Key::ESCAPE) {
+            out.push(Command::Escape);
+        }
 
         let k = |key: Key| input.is_physical_key_pressed(key) as i32;
-        let dx = (k(Key::D) | k(Key::RIGHT)) - (k(Key::A) | k(Key::LEFT));
-        let dy = (k(Key::S) | k(Key::DOWN)) - (k(Key::W) | k(Key::UP));
-        if (dx, dy) != self.last_dir {
-            self.last_dir = (dx, dy);
-            out.push(Command::Move(dx, dy));
+        let right = (k(Key::D) | k(Key::RIGHT)) - (k(Key::A) | k(Key::LEFT));
+        let fwd = (k(Key::W) | k(Key::UP)) - (k(Key::S) | k(Key::DOWN));
+        if (right, fwd) != self.last_dir {
+            self.last_dir = (right, fwd);
+            out.push(Command::Move);
         }
         if input.is_physical_key_pressed(Key::SPACE) && self.attack_repeat <= 0.0 {
             self.attack_repeat = 0.25;
             out.push(Command::Attack);
         }
         if input.is_physical_key_pressed(Key::E) && self.gather_repeat <= 0.0 {
-            self.gather_repeat = 0.25;
+            self.gather_repeat = 0.3;
             out.push(Command::Gather);
         }
-        if self.just_pressed(&input, Key::Q) {
-            out.push(Command::Potion);
+        for (key, cmd) in [
+            (Key::Q, Command::Potion),
+            (Key::Y, Command::Tame),
+            (Key::C, Command::ToggleCrafting),
+            (Key::I, Command::ToggleInventory),
+            (Key::M, Command::ToggleMap),
+            (Key::TAB, Command::NextTarget),
+            (Key::K, Command::Menu("char")),
+            (Key::B, Command::Menu("spells")),
+            (Key::H, Command::Menu("pets")),
+            (Key::J, Command::Menu("rep")),
+            (Key::L, Command::Menu("journal")),
+        ] {
+            if self.just_pressed(&input, key) {
+                out.push(cmd);
+            }
         }
-        if self.just_pressed(&input, Key::C) {
-            out.push(Command::ToggleCrafting);
+        for (i, key) in SPELL_KEYS.into_iter().enumerate() {
+            if self.just_pressed(&input, key) {
+                out.push(Command::Cast(i));
+            }
         }
         let digits = [
             Key::KEY_1,

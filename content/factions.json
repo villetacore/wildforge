@@ -1,0 +1,24 @@
+{
+  "factions": [
+    { "id": "crown",       "name": "Crown of Velhrad",       "color": "#d4a83a", "desc": "The royal house and its city watch.",          "allies": ["merchants", "collegium"], "enemies": ["redcaps", "ashborn", "shadows"] },
+    { "id": "merchants",   "name": "Merchant League",        "color": "#5ac0a0", "desc": "Traders, bankers and caravan masters.",         "allies": ["crown", "sandwalkers"],  "enemies": ["redcaps"] },
+    { "id": "collegium",   "name": "Arcane Collegium",       "color": "#7a8aff", "desc": "Scholars of the arcane arts.",                  "allies": ["crown"],                 "enemies": ["ashborn"] },
+    { "id": "wardens",     "name": "Greenwood Wardens",      "color": "#5aa04a", "desc": "Rangers who guard the Darkpine Weald.",         "allies": ["frostkin"],              "enemies": ["redcaps", "ashborn"] },
+    { "id": "shadows",     "name": "Brotherhood of Shadows", "color": "#7a5a9a", "desc": "Thieves, fences and fixers. They pay well.",    "allies": [],                        "enemies": ["crown"] },
+    { "id": "frostkin",    "name": "Frostkin Clans",         "color": "#9fd8ff", "desc": "Hardy folk of the northern peaks.",             "allies": ["wardens"],               "enemies": ["ashborn"] },
+    { "id": "sandwalkers", "name": "Sandwalker Caravans",    "color": "#e0b060", "desc": "Nomads who know every well in the dunes.",      "allies": ["merchants"],             "enemies": ["redcaps"] },
+    { "id": "mirefolk",    "name": "Mirefolk",               "color": "#7a9a5a", "desc": "Swamp dwellers. Strange, but loyal friends.",    "allies": [],                        "enemies": ["ashborn"] },
+    { "id": "redcaps",     "name": "Redcap Bandits",         "color": "#c03a2a", "desc": "Highwaymen of the realm.",                      "allies": [], "enemies": ["crown", "merchants"], "hostile": true },
+    { "id": "ashborn",     "name": "Ashborn Cult",           "color": "#8a1c2a", "desc": "Fire-worshipping cultists of the Ashen Reach.", "allies": [], "enemies": ["collegium", "crown"], "hostile": true }
+  ],
+  "ranks": [
+    { "name": "Hated",      "min": -42000, "color": "#d02020", "price": 0 },
+    { "name": "Hostile",    "min": -6000,  "color": "#e04a20", "price": 0 },
+    { "name": "Unfriendly", "min": -3000,  "color": "#e08a3a", "price": 1.2 },
+    { "name": "Neutral",    "min": 0,      "color": "#e0d040", "price": 1.0 },
+    { "name": "Friendly",   "min": 3000,   "color": "#7ad04a", "price": 0.95 },
+    { "name": "Honored",    "min": 9000,   "color": "#4ad07a", "price": 0.9 },
+    { "name": "Revered",    "min": 21000,  "color": "#3ad0b0", "price": 0.85 },
+    { "name": "Exalted",    "min": 42000,  "color": "#3ab0ff", "price": 0.8 }
+  ]
+}

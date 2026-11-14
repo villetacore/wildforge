@@ -16,18 +16,20 @@ import (
 )
 
 const (
-	TickRate       = 20
-	dt             = 1.0 / TickRate
-	viewRadius     = 30.0
-	playerSpeed    = 5.0
-	attackRange    = 1.8
-	attackCooldown = 0.45
-	gatherRange    = 1.7
-	gatherCooldown = 0.5
-	pickupRange    = 0.9
-	aggroRange     = 7.0
-	leashRange     = 16.0
-	saveInterval   = 30.0
+	TickRate        = 20
+	dt              = 1.0 / TickRate
+	viewRadius      = 34.0
+	playerSpeed     = 5.0
+	attackRange     = 1.9
+	attackCooldown  = 0.45
+	gatherRange     = 1.7
+	gatherCooldown  = 0.5
+	pickupRange     = 0.9
+	aggroRange      = 7.0
+	leashRange      = 16.0
+	saveInterval    = 30.0
+	dayLength       = 900.0 // seconds per in-game day
+	contractRefresh = 600.0
 )
 
 // Saver persists a character; implemented by storage.Store.
@@ -53,44 +55,55 @@ type event struct {
 }
 
 type GroundItem struct {
-	Item string
-	Qty  int
+	content.Stack
 	X, Y float64
 	TTL  float64
 }
 
 type Game struct {
-	chestTimers map[int]float64
-	guardTimers map[*Enemy]float64
-	pack        *content.Pack
-	world       *world.World
-	saver       Saver
+	pack  *content.Pack
+	world *world.World
+	saver Saver
 
 	terrainEnc string
 	nodesEnc   string
+	zonesEnc   string
 
 	players     map[int64]*Player
 	enemies     map[int64]*Enemy
+	npcs        map[int64]*NPC
+	pets        map[int64]*PetEnt
 	items       map[int64]*GroundItem
 	enemyTimers []float64
 	nodeTimers  map[int]float64
+	chestTimers map[int]float64
+	dungeons    map[int]*dungeonState
+	boards      [][]Contract
 	fx          []protocol.Fx
 	nextID      int64
 	saveT       float64
+	clock       float64
+	contractT   float64
 	events      chan event
 }
 
 func New(pack *content.Pack, w *world.World, saver Saver) *Game {
 	g := &Game{
-		pack: pack, world: w, saver: saver, chestTimers: map[int]float64{}, guardTimers: map[*Enemy]float64{},
-		terrainEnc: w.EncodeTerrain(), nodesEnc: w.EncodeNodes(),
-		players: map[int64]*Player{}, enemies: map[int64]*Enemy{}, items: map[int64]*GroundItem{},
-		nodeTimers: map[int]float64{}, saveT: saveInterval, events: make(chan event, 1024),
+		pack: pack, world: w, saver: saver,
+		terrainEnc: w.EncodeTerrain(), nodesEnc: w.EncodeNodes(), zonesEnc: w.EncodeZones(),
+		players: map[int64]*Player{}, enemies: map[int64]*Enemy{}, npcs: map[int64]*NPC{}, pets: map[int64]*PetEnt{},
+		items: map[int64]*GroundItem{}, nodeTimers: map[int]float64{}, chestTimers: map[int]float64{},
+		dungeons: map[int]*dungeonState{}, saveT: saveInterval, contractT: contractRefresh, events: make(chan event, 1024),
+		clock: dayLength * 0.1,
 	}
 	for range pack.World.EnemyCount {
 		g.spawnEnemy()
 	}
-	g.spawnDungeonGuards()
+	for i := range w.Dungeons {
+		g.spawnDungeon(i)
+	}
+	g.spawnNPCs()
+	g.refreshContracts()
 	return g
 }
 
@@ -183,9 +196,13 @@ func (g *Game) save(p *Player, async bool) {
 	}
 }
 
+// TimeOfDay is 0..1 (0 = midnight, 0.5 = noon).
+func (g *Game) TimeOfDay() float64 { return math.Mod(g.clock/dayLength+0.3, 1) }
+
 // ---- tick
 
 func (g *Game) tick() {
+	g.clock += dt
 	for i, t := range g.chestTimers {
 		if t <= dt {
 			delete(g.chestTimers, i)
@@ -195,9 +212,15 @@ func (g *Game) tick() {
 	}
 	g.tickPlayers()
 	g.tickEnemies()
+	g.tickPets()
 	g.tickGroundItems()
 	g.tickNodes()
 	g.tickRespawns()
+	g.tickDungeons()
+	if g.contractT -= dt; g.contractT <= 0 {
+		g.contractT = contractRefresh
+		g.refreshContracts()
+	}
 	if g.saveT -= dt; g.saveT <= 0 {
 		g.saveT = saveInterval
 		for _, p := range g.players {
@@ -209,27 +232,6 @@ func (g *Game) tick() {
 }
 
 func (g *Game) tickRespawns() {
-	for e, t := range g.guardTimers {
-		if t > dt {
-			g.guardTimers[e] = t - dt
-			continue
-		}
-		nearby := false
-		for _, p := range g.players {
-			if dist(p.Ch.X, p.Ch.Y, e.HomeX, e.HomeY) < 5 {
-				nearby = true
-			}
-		}
-		if nearby {
-			g.guardTimers[e] = 5
-			continue
-		}
-		e.X, e.Y, e.HP, e.Target = e.HomeX, e.HomeY, e.MaxHP, 0
-		e.AttackCD = 0
-		g.enemies[g.newID()] = e
-		delete(g.guardTimers, e)
-	}
-
 	ready := 0
 	kept := g.enemyTimers[:0]
 	for _, t := range g.enemyTimers {

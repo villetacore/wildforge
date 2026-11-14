@@ -1,9 +1,11 @@
-//! Gatherable resource nodes (trees, rocks, ores, crystals) drawn with one
-//! MultiMesh per model part. Depleted nodes are hidden by collapsing their
-//! instance transforms; gathering makes a node shake briefly.
+//! Gatherable resource nodes (trees, rocks, ores, crystals, herbs) drawn with
+//! one MultiMesh per model part and 64x64 tile chunk, so distant chunks are
+//! culled. Depleted nodes are hidden by collapsing their instance
+//! transforms; gathering makes a node shake briefly.
 
 use std::collections::{HashMap, HashSet};
 
+use godot::classes::geometry_instance_3d::VisibilityRangeFadeMode;
 use godot::classes::multi_mesh::TransformFormat;
 use godot::classes::{Material, MultiMesh, MultiMeshInstance3D, Node3D};
 use godot::prelude::*;
@@ -13,16 +15,19 @@ use crate::content::{parse_color, ContentLibrary};
 use crate::net::Catalog;
 
 const SHAKE_TIME: f32 = 0.35;
+const CHUNK: usize = 64;
+const VIEW: f32 = 120.0;
 
-struct Kind {
-    parts: Vec<Part>,
+struct Group {
+    kind: usize,
     multimeshes: Vec<Gd<MultiMesh>>,
     node_tf: Vec<Transform3D>,
 }
 
 pub struct ResourceField {
-    kinds: Vec<Kind>,
-    /// tile index -> (kind, instance)
+    parts: Vec<Vec<Part>>,
+    groups: Vec<Group>,
+    /// tile index -> (group, instance)
     slots: HashMap<usize, (usize, usize)>,
     shakes: Vec<(usize, f32)>,
     dead: HashSet<usize>,
@@ -50,23 +55,29 @@ impl ResourceField {
     ) -> ResourceField {
         let mut root = Node3D::new_alloc();
         root.set_name("Resources");
-
-        let mut per_kind: Vec<Vec<usize>> = vec![Vec::new(); catalog.defs.resources.len()];
+        let parts: Vec<Vec<Part>> = catalog
+            .defs
+            .resources
+            .iter()
+            .map(|def| {
+                models::resource_parts(&def.model, &def.texture, parse_color(&def.color), lib)
+            })
+            .collect();
+        let chunks = size.div_ceil(CHUNK);
+        // (kind, chunk) -> tiles
+        let mut buckets: HashMap<(usize, usize), Vec<usize>> = HashMap::new();
         for (i, code) in nodes.iter().enumerate() {
-            if let Some(list) = (*code as usize)
-                .checked_sub(1)
-                .and_then(|k| per_kind.get_mut(k))
-            {
-                list.push(i);
+            if let Some(k) = (*code as usize).checked_sub(1).filter(|k| *k < parts.len()) {
+                let chunk = (i / size / CHUNK) * chunks + (i % size) / CHUNK;
+                buckets.entry((k, chunk)).or_default().push(i);
             }
         }
-
-        let mut kinds = Vec::new();
+        let mut keys: Vec<_> = buckets.keys().copied().collect();
+        keys.sort();
+        let mut groups = Vec::new();
         let mut slots = HashMap::new();
-        for (k, def) in catalog.defs.resources.iter().enumerate() {
-            let tiles = &per_kind[k];
-            let parts =
-                models::resource_parts(&def.model, &def.texture, parse_color(&def.color), lib);
+        for (k, chunk) in keys {
+            let tiles = &buckets[&(k, chunk)];
             let node_tf: Vec<Transform3D> = tiles
                 .iter()
                 .map(|&i| {
@@ -82,7 +93,7 @@ impl ResourceField {
                 })
                 .collect();
             let mut multimeshes = Vec::new();
-            for part in &parts {
+            for part in &parts[k] {
                 let mut mm = MultiMesh::new_gd();
                 mm.set_transform_format(TransformFormat::TRANSFORM_3D);
                 mm.set_mesh(&part.mesh);
@@ -93,14 +104,18 @@ impl ResourceField {
                 let mut mmi = MultiMeshInstance3D::new_alloc();
                 mmi.set_multimesh(&mm);
                 mmi.set_material_override(&part.material.clone().upcast::<Material>());
+                mmi.set_visibility_range_end(VIEW);
+                mmi.set_visibility_range_end_margin(10.0);
+                mmi.set_visibility_range_fade_mode(VisibilityRangeFadeMode::SELF);
                 root.add_child(&mmi);
                 multimeshes.push(mm);
             }
+            let g = groups.len();
             for (n, &i) in tiles.iter().enumerate() {
-                slots.insert(i, (k, n));
+                slots.insert(i, (g, n));
             }
-            kinds.push(Kind {
-                parts,
+            groups.push(Group {
+                kind: k,
                 multimeshes,
                 node_tf,
             });
@@ -108,7 +123,8 @@ impl ResourceField {
         parent.add_child(&root);
 
         let mut field = ResourceField {
-            kinds,
+            parts,
+            groups,
             slots,
             shakes: Vec::new(),
             dead: HashSet::new(),
@@ -121,21 +137,24 @@ impl ResourceField {
     }
 
     fn write(&mut self, tile: usize, tf: Option<Transform3D>) {
-        let Some(&(k, n)) = self.slots.get(&tile) else {
+        let Some(&(g, n)) = self.slots.get(&tile) else {
             return;
         };
         if self.dead.contains(&tile) {
             return;
         }
-        let kind = &mut self.kinds[k];
-        let base = tf.unwrap_or(kind.node_tf[n]);
-        for (part, mm) in kind.parts.iter().zip(kind.multimeshes.iter_mut()) {
+        let group = &mut self.groups[g];
+        let base = tf.unwrap_or(group.node_tf[n]);
+        for (part, mm) in self.parts[group.kind]
+            .iter()
+            .zip(group.multimeshes.iter_mut())
+        {
             mm.set_instance_transform(n as i32, base * part.local);
         }
     }
 
     pub fn set_alive(&mut self, tile: usize, alive: bool) {
-        let Some(&(k, n)) = self.slots.get(&tile) else {
+        let Some(&(g, n)) = self.slots.get(&tile) else {
             return;
         };
         self.shakes.retain(|s| s.0 != tile);
@@ -144,9 +163,12 @@ impl ResourceField {
             self.write(tile, None);
         } else {
             self.dead.insert(tile);
-            let tf = self.kinds[k].node_tf[n];
-            let kind = &mut self.kinds[k];
-            for (part, mm) in kind.parts.iter().zip(kind.multimeshes.iter_mut()) {
+            let group = &mut self.groups[g];
+            let tf = group.node_tf[n];
+            for (part, mm) in self.parts[group.kind]
+                .iter()
+                .zip(group.multimeshes.iter_mut())
+            {
                 mm.set_instance_transform(n as i32, hidden(tf * part.local));
             }
         }
@@ -167,10 +189,10 @@ impl ResourceField {
         let mut shakes = std::mem::take(&mut self.shakes);
         for (tile, t) in shakes.iter_mut() {
             *t += delta;
-            let Some(&(k, n)) = self.slots.get(tile) else {
+            let Some(&(g, n)) = self.slots.get(tile) else {
                 continue;
             };
-            let base = self.kinds[k].node_tf[n];
+            let base = self.groups[g].node_tf[n];
             let k01 = (1.0 - *t / SHAKE_TIME).max(0.0);
             let angle = (*t * 45.0).sin() * 0.12 * k01;
             let tilt = Basis::from_axis_angle(Vector3::FORWARD, angle);

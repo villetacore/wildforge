@@ -93,7 +93,7 @@ impl CraftingPanel {
         if !self.root.is_visible() {
             return;
         }
-        let sig = format!("{:?}", s.you.inventory);
+        let sig = s.inv_version.to_string();
         if sig != self.signature {
             self.signature = sig;
             let selected = self.list.get_selected_items().as_slice().first().copied();

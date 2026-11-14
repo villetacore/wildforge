@@ -1,0 +1,43 @@
+{
+  "spells": [
+    { "id": "firebolt",     "name": "Firebolt",        "school": "fire",   "kind": "bolt",       "mana": 8,  "cd": 1.2, "range": 9,  "power": 10, "scale": 0.9, "status": "burn",   "chance": 0.3, "color": "#ff7030", "level": 1, "price": 0,   "desc": "Hurls a bolt of flame. May set the target on fire." },
+    { "id": "minor_heal",   "name": "Minor Heal",      "school": "holy",   "kind": "heal",       "mana": 12, "cd": 6,   "range": 0,  "power": 18, "scale": 1.0, "color": "#8aff8a", "level": 1, "price": 0,   "desc": "Mends your wounds." },
+    { "id": "frost_shard",  "name": "Frost Shard",     "school": "frost",  "kind": "bolt",       "mana": 9,  "cd": 1.5, "range": 9,  "power": 9,  "scale": 0.85, "status": "chill", "chance": 0.8, "color": "#8ad8ff", "level": 2, "price": 40,  "desc": "A shard of ice that slows the target." },
+    { "id": "spark",        "name": "Spark",           "school": "storm",  "kind": "bolt",       "mana": 6,  "cd": 0.8, "range": 8,  "power": 7,  "scale": 0.7, "status": "shock",  "chance": 0.25, "color": "#ffe75a", "level": 2, "price": 40, "desc": "A quick jolt of lightning." },
+    { "id": "ignite",       "name": "Ignite",          "school": "fire",   "kind": "dot",        "mana": 10, "cd": 4,   "range": 9,  "power": 4,  "scale": 0.4, "status": "burn",   "chance": 1.0, "color": "#ff4a1a", "level": 3, "price": 60,  "desc": "Sets the target ablaze for several seconds." },
+    { "id": "poison_cloud", "name": "Poison Cloud",    "school": "poison", "kind": "aoe_target", "mana": 18, "cd": 8,   "range": 9,  "power": 5,  "scale": 0.4, "radius": 3, "status": "poison", "chance": 1.0, "color": "#8fe03a", "level": 4, "price": 90, "desc": "Engulfs an area in toxic fumes." },
+    { "id": "frost_nova",   "name": "Frost Nova",      "school": "frost",  "kind": "aoe_self",   "mana": 20, "cd": 10,  "range": 0,  "power": 10, "scale": 0.6, "radius": 4, "status": "freeze", "chance": 0.9, "color": "#bff0ff", "level": 5, "price": 120, "desc": "Freezes enemies around you in place." },
+    { "id": "renew",        "name": "Renew",           "school": "holy",   "kind": "buff",       "mana": 14, "cd": 12,  "range": 0,  "power": 0,  "scale": 0,   "status": "regen", "color": "#b0ffb0", "level": 5, "price": 100, "desc": "Heals you over time." },
+    { "id": "arcane_shield","name": "Arcane Shield",   "school": "arcane", "kind": "buff",       "mana": 22, "cd": 20,  "range": 0,  "power": 0,  "scale": 0,   "status": "shield", "color": "#a08aff", "level": 6, "price": 150, "desc": "A barrier that absorbs damage." },
+    { "id": "fireball",     "name": "Fireball",        "school": "fire",   "kind": "aoe_target", "mana": 24, "cd": 5,   "range": 10, "power": 20, "scale": 1.1, "radius": 2.5, "status": "burn", "chance": 0.4, "color": "#ff9030", "level": 7, "price": 200, "desc": "An explosive ball of fire." },
+    { "id": "chain_lightning","name": "Chain Lightning","school": "storm", "kind": "chain",      "mana": 26, "cd": 6,   "range": 9,  "power": 16, "scale": 0.9, "chain": 4, "status": "shock", "chance": 0.5, "color": "#fff07a", "level": 8, "price": 240, "desc": "Lightning that leaps between foes." },
+    { "id": "shadow_bolt",  "name": "Shadow Bolt",     "school": "shadow", "kind": "bolt",       "mana": 16, "cd": 2,   "range": 10, "power": 22, "scale": 1.2, "status": "weaken", "chance": 0.35, "color": "#8a5cff", "level": 9, "price": 260, "desc": "A bolt of pure darkness." },
+    { "id": "drain_life",   "name": "Drain Life",      "school": "shadow", "kind": "drain",      "mana": 18, "cd": 6,   "range": 8,  "power": 16, "scale": 0.9, "color": "#c03050", "level": 10, "price": 300, "desc": "Steals the target's life to heal you." },
+    { "id": "haste",        "name": "Haste",           "school": "arcane", "kind": "buff",       "mana": 15, "cd": 30,  "range": 0,  "power": 0,  "scale": 0,   "status": "haste", "color": "#7affd0", "level": 11, "price": 320, "desc": "Move faster for a while." },
+    { "id": "smite",        "name": "Smite",           "school": "holy",   "kind": "bolt",       "mana": 20, "cd": 3,   "range": 9,  "power": 28, "scale": 1.3, "status": "stun", "chance": 0.25, "color": "#fff3b0", "level": 12, "price": 380, "desc": "Holy wrath. Devastating against the undead." },
+    { "id": "meteor",       "name": "Meteor",          "school": "fire",   "kind": "aoe_target", "mana": 45, "cd": 18,  "range": 11, "power": 48, "scale": 2.0, "radius": 3.5, "status": "burn", "chance": 0.8, "color": "#ff5010", "level": 15, "price": 700, "desc": "Calls a burning rock from the sky." },
+    { "id": "blizzard",     "name": "Blizzard",        "school": "frost",  "kind": "aoe_target", "mana": 40, "cd": 16,  "range": 10, "power": 30, "scale": 1.5, "radius": 4, "status": "chill", "chance": 1.0, "color": "#d0f4ff", "level": 16, "price": 700, "desc": "A storm of ice over an area." },
+    { "id": "greater_heal", "name": "Greater Heal",    "school": "holy",   "kind": "heal",       "mana": 30, "cd": 8,   "range": 0,  "power": 60, "scale": 2.0, "color": "#5aff7a", "level": 14, "price": 500, "desc": "Restores a large amount of health." }
+  ],
+  "statuses": [
+    { "id": "burn",     "name": "Burning",    "color": "#ff6a2a", "dur": 4,  "dot": 3,   "bad": true },
+    { "id": "poison",   "name": "Poisoned",   "color": "#8fe03a", "dur": 6,  "dot": 2,   "bad": true },
+    { "id": "bleed",    "name": "Bleeding",   "color": "#d01c2c", "dur": 5,  "dot": 2.5, "bad": true },
+    { "id": "chill",    "name": "Chilled",    "color": "#8ad8ff", "dur": 3,  "slow": 0.4, "bad": true },
+    { "id": "freeze",   "name": "Frozen",     "color": "#d0f4ff", "dur": 2,  "stun": true, "bad": true },
+    { "id": "stun",     "name": "Stunned",    "color": "#ffe0a0", "dur": 1.2, "stun": true, "bad": true },
+    { "id": "shock",    "name": "Shocked",    "color": "#ffe75a", "dur": 4,  "taken": 1.2, "bad": true },
+    { "id": "weaken",   "name": "Weakened",   "color": "#8a5cff", "dur": 6,  "dealt": 0.75, "bad": true },
+    { "id": "regen",    "name": "Renewing",   "color": "#b0ffb0", "dur": 12, "hot": 0.025 },
+    { "id": "shield",   "name": "Arcane Shield", "color": "#a08aff", "dur": 15, "absorb": 40 },
+    { "id": "haste",    "name": "Hasted",     "color": "#7affd0", "dur": 15, "stats": { "speed": 35 } },
+    { "id": "well_rested", "name": "Well Rested", "color": "#ffd27a", "dur": 1800, "xp": 0.25, "stats": { "regen": 1 } },
+    { "id": "drunk",    "name": "Tipsy",      "color": "#e0b040", "dur": 120, "stats": { "str": 2, "dex": -3, "int": -2 } },
+    { "id": "fed",      "name": "Well Fed",   "color": "#e0a070", "dur": 900, "stats": { "vit": 2, "regen": 1 } },
+    { "id": "inspired", "name": "Inspired",   "color": "#ff9ad0", "dur": 1200, "xp": 0.1, "stats": { "crit": 3 } },
+    { "id": "disease_gonorrhea", "name": "Gonorrhea", "color": "#c0c060", "dur": -1, "bad": true, "disease": true, "stats": { "dex": -3, "speed": -10, "regen": -1 }, "desc": "Every step is a reminder of a cheap night. A healer can cure it." },
+    { "id": "disease_chlamydia", "name": "Chlamydia", "color": "#a0c080", "dur": -1, "bad": true, "disease": true, "stats": { "int": -3, "mana_regen": -0.5 }, "xp": -0.1, "desc": "A nagging infection that clouds the mind. A healer can cure it." },
+    { "id": "disease_lice",      "name": "Crab Lice", "color": "#b09070", "dur": -1, "bad": true, "disease": true, "stats": { "dex": -2, "crit": -3 }, "desc": "Constant itching ruins your aim. A healer can cure it." },
+    { "id": "disease_rot",       "name": "Grave Rot", "color": "#708060", "dur": -1, "bad": true, "disease": true, "stats": { "vit": -3, "hp": -15 }, "desc": "Caught from the bite of a rabid creature. A healer can cure it." }
+  ]
+}

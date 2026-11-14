@@ -15,7 +15,9 @@ import (
 	"path/filepath"
 )
 
-const N = 128 // texture size in pixels
+// N is the texture size in pixels. Shaders are written for a 128 px design
+// grid; px/py are scaled so higher resolutions add detail, not repeats.
+var N = 512
 
 type rgb struct{ r, g, b float64 }
 
@@ -43,6 +45,9 @@ func hash(x, y int, seed uint32) float64 {
 
 func wrap(v, p int) int { return ((v % p) + p) % p }
 
+// S converts design-grid units (128 px textures) to pixels at the current N.
+func S() float64 { return float64(N) / 128 }
+
 func noise(x, y float64, period int, seed uint32) float64 {
 	xi, yi := int(math.Floor(x)), int(math.Floor(y))
 	xf, yf := x-float64(xi), y-float64(yi)
@@ -57,7 +62,7 @@ func fbm(px, py float64, cells, octaves int, seed uint32) float64 {
 	sum, amp, norm := 0.0, 1.0, 0.0
 	for o := 0; o < octaves; o++ {
 		k := cells << o
-		sum += noise(px*float64(k)/N, py*float64(k)/N, k, seed+uint32(o)*31) * amp
+		sum += noise(px*float64(k)/float64(N), py*float64(k)/float64(N), k, seed+uint32(o)*31) * amp
 		norm += amp
 		amp *= 0.5
 	}
@@ -67,7 +72,7 @@ func fbm(px, py float64, cells, octaves int, seed uint32) float64 {
 // voronoi returns distances to the nearest and second nearest feature point,
 // with `cells` cells per texture side (tileable).
 func voronoi(px, py float64, cells int, seed uint32) (float64, float64) {
-	x, y := px*float64(cells)/N, py*float64(cells)/N
+	x, y := px*float64(cells)/float64(N), py*float64(cells)/float64(N)
 	xi, yi := int(math.Floor(x)), int(math.Floor(y))
 	d1, d2 := 9.0, 9.0
 	for j := -1; j <= 1; j++ {
@@ -151,7 +156,7 @@ var textures = map[string]shader{
 	},
 	"bark": func(x, y float64) rgb {
 		n := fbm(x*4, y*0.5, 2, 4, 13)
-		lines := math.Abs(math.Sin((x/N*12 + n*2) * math.Pi))
+		lines := math.Abs(math.Sin((x/float64(N)*12 + n*2) * math.Pi))
 		col := mix(c(0x3d2814), c(0x7a5432), n)
 		return col.mul(0.75 + 0.25*lines)
 	},
@@ -229,13 +234,167 @@ var textures = map[string]shader{
 	},
 }
 
+// detail adds fine high-frequency variation that only shows at high resolution.
+func detail(x, y float64, seed uint32) float64 { return fbm(x, y, 64, 3, seed) - 0.5 }
+
+// extra are the textures added with zones and towns. They are generated at
+// full resolution; the hand-painted atlas textures are left alone.
+var extra = map[string]shader{
+	"snow": func(x, y float64) rgb {
+		n := fbm(x, y, 4, 5, 40)
+		col := mix(c(0xc8d4e4), c(0xf6f9ff), n*0.9+0.2)
+		if hash(int(x), int(y), 41) > 0.996 {
+			col = c(0xffffff) // sparkle
+		}
+		return col.mul(1 + detail(x, y, 42)*0.08)
+	},
+	"swamp": func(x, y float64) rgb {
+		n := fbm(x, y, 5, 5, 43)
+		col := mix(c(0x2e3a22), c(0x5a6a38), n)
+		if d1, _ := voronoi(x, y, 7, 44); d1 < 0.22 && n < 0.5 {
+			col = mix(col, c(0x2a3a34), 0.7) // puddles
+		}
+		return col.mul(1 + detail(x, y, 45)*0.15)
+	},
+	"ash": func(x, y float64) rgb {
+		n := fbm(x, y, 6, 5, 46)
+		col := mix(c(0x2a2624), c(0x5a524c), n)
+		if d1, d2 := voronoi(x, y, 9, 47); d2-d1 < 0.04 {
+			col = mix(col, c(0xc0401a), 0.55) // glowing cracks
+		}
+		return col.mul(1 + detail(x, y, 48)*0.12)
+	},
+	"lava": func(x, y float64) rgb {
+		n := fbm(x, y, 3, 5, 49)
+		d1, d2 := voronoi(x, y, 5, 50)
+		col := mix(c(0xff3a00), c(0xffd040), n)
+		if d2-d1 > 0.18 {
+			col = mix(col, c(0x2a1a14), smoothCrust(d2-d1))
+		}
+		return col
+	},
+	"cobble": func(x, y float64) rgb {
+		d1, d2 := voronoi(x, y, 14, 51)
+		n := fbm(x, y, 10, 3, 52)
+		stone := hash(int(math.Floor(x*14/float64(N))), int(math.Floor(y*14/float64(N))), 53)
+		col := mix(c(0x5c5a58), c(0x9a948a), 0.35+n*0.5+stone*0.2)
+		col = col.mul(1.05 - d1*0.35)
+		if d2-d1 < 0.07 {
+			col = mix(c(0x2a2622), c(0x4a4038), n) // mortar and dirt
+		}
+		return col.mul(1 + detail(x, y, 54)*0.1)
+	},
+	"roof_tiles": func(x, y float64) rgb { // terracotta pantiles, tinted per house
+		row := int(y / (8 * S()))
+		off := 0.0
+		if row%2 == 1 {
+			off = 4 * S()
+		}
+		u := math.Mod(x+off, 8*S()) / (8 * S())
+		v := math.Mod(y, 8*S()) / (8 * S())
+		curve := math.Sin(u*math.Pi)*0.25 + 0.75
+		n := fbm(x, y, 8, 4, 55)
+		col := mix(c(0xb8b0a8), c(0xffffff), n*0.4+0.6).mul(curve)
+		if v > 0.85 {
+			col = col.mul(0.55) // overlap shadow
+		}
+		return col.mul(1 + detail(x, y, 56)*0.08)
+	},
+	"slate": func(x, y float64) rgb {
+		row := int(y / (6 * S()))
+		off := float64(row%2) * 5 * S()
+		u := math.Mod(x+off, 10*S()) / (10 * S())
+		v := math.Mod(y, 6*S()) / (6 * S())
+		n := fbm(x, y, 6, 4, 57)
+		col := mix(c(0x9a9aa2), c(0xd8d8e0), n)
+		if u < 0.06 || v > 0.88 {
+			col = col.mul(0.5)
+		}
+		return col
+	},
+	"marble": func(x, y float64) rgb {
+		n := fbm(x, y, 3, 6, 58)
+		vein := math.Abs(math.Sin((x/float64(N)*6 + n*5) * math.Pi))
+		col := mix(c(0xe8e4dc), c(0xfaf8f4), n)
+		if vein < 0.06 {
+			col = mix(col, c(0x8a8478), 0.6)
+		}
+		return col
+	},
+	"sandstone": func(x, y float64) rgb {
+		band := fbm(x*0.2, y*3, 2, 4, 59)
+		n := fbm(x, y, 8, 4, 60)
+		col := mix(c(0xc8a068), c(0xe8c890), band*0.7+n*0.3)
+		row := int(y / (16 * S()))
+		if math.Mod(y, 16*S()) < 1.2*S() || math.Mod(x+float64(row%2)*16*S(), 32*S()) < 1.2*S() {
+			col = col.mul(0.7)
+		}
+		return col
+	},
+	"timber": func(x, y float64) rgb { // half-timbered wall: plaster with dark beams, tinted
+		bx := math.Mod(x, 64*S()) / (64 * S())
+		by := math.Mod(y, 64*S()) / (64 * S())
+		n := fbm(x, y, 8, 4, 61)
+		beam := bx < 0.08 || by < 0.08 || math.Abs(bx-by) < 0.05
+		if beam {
+			return mix(c(0x3a2818), c(0x5a3c22), fbm(x*0.3, y*3, 4, 3, 62))
+		}
+		return mix(c(0xd8d0c0), c(0xf8f4ec), n)
+	},
+	"moss": func(x, y float64) rgb {
+		n := fbm(x, y, 6, 5, 63)
+		d1, _ := voronoi(x, y, 20, 64)
+		return mix(c(0x2a4a1a), c(0x6a8a3a), n*0.8+(1-d1)*0.3).mul(1 + detail(x, y, 65)*0.2)
+	},
+	"ice": func(x, y float64) rgb {
+		n := fbm(x, y, 3, 5, 66)
+		d1, d2 := voronoi(x, y, 6, 67)
+		col := mix(c(0x7ab0d8), c(0xd8f0ff), n*0.7+d1*0.3)
+		if d2-d1 < 0.03 {
+			col = mix(col, c(0xffffff), 0.7)
+		}
+		return col
+	},
+	"steel": func(x, y float64) rgb { // clean brushed metal, tinted per item
+		brush := fbm(x*0.08, y*6, 4, 4, 69)
+		n := fbm(x, y, 8, 3, 70)
+		v := 0.72 + 0.16*brush + 0.08*n
+		if hash(int(x), int(y), 71) > 0.995 {
+			v -= 0.25 // tiny scratches
+		}
+		return rgb{v, v, v * 1.02}
+	},
+	"window": func(x, y float64) rgb { // leaded glass, used on houses at night
+		u := math.Mod(x, 16*S()) / (16 * S())
+		v := math.Mod(y, 16*S()) / (16 * S())
+		if u < 0.08 || v < 0.08 {
+			return c(0x2a2420)
+		}
+		return mix(c(0xffc060), c(0xffe8a0), fbm(x, y, 4, 2, 68))
+	},
+}
+
+func smoothCrust(t float64) float64 { t = clamp((t - 0.18) * 6); return t * t * (3 - 2*t) }
+
 func main() {
 	out := flag.String("out", "../content/textures", "output directory")
+	legacy := flag.Bool("legacy", false, "also regenerate the original procedural set (overwrites the painted atlas textures)")
+	size := flag.Int("size", 512, "texture size in pixels")
 	flag.Parse()
+	N = *size
 	if err := os.MkdirAll(*out, 0o755); err != nil {
 		log.Fatal(err)
 	}
-	for name, shade := range textures {
+	set := map[string]shader{}
+	for k, v := range extra {
+		set[k] = v
+	}
+	if *legacy {
+		for k, v := range textures {
+			set[k] = v
+		}
+	}
+	for name, shade := range set {
 		img := image.NewNRGBA(image.Rect(0, 0, N, N))
 		for y := 0; y < N; y++ {
 			for x := 0; x < N; x++ {
@@ -252,5 +411,5 @@ func main() {
 		}
 		f.Close()
 	}
-	log.Printf("wrote %d textures to %s", len(textures), *out)
+	log.Printf("wrote %d textures to %s", len(set), *out)
 }
