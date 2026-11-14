@@ -1,0 +1,206 @@
+# Tests on every push and pull request; on main and on v* tags it also builds
+# the game client for Linux, Windows and macOS and publishes the server image
+# to ghcr.io. Tags additionally create a GitHub release with the client zips.
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  GODOT_VERSION: "4.7.2"
+  CARGO_TERM_COLOR: always
+
+jobs:
+  server-test:
+    name: Server tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: server/go.mod
+          cache-dependency-path: server/go.sum
+      - name: gofmt
+        run: test -z "$(gofmt -l .)" || (gofmt -l . && exit 1)
+      - run: go vet ./...
+      - name: Tests (content validation, world generation, game systems)
+        run: go test -race -count=1 ./...
+
+  client-check:
+    name: Client fmt and lint
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: client/rust
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: client/rust
+      - run: cargo fmt --check
+      - run: cargo clippy --locked -- -D clippy::correctness
+
+  client-lib:
+    name: Client library (${{ matrix.name }})
+    needs: client-check
+    if: github.event_name != 'pull_request'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux
+            os: ubuntu-latest
+            file: libwildforge_client.so
+          - name: windows
+            os: windows-latest
+            file: wildforge_client.dll
+          - name: macos
+            os: macos-latest
+            file: libwildforge_client.dylib
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.name == 'macos' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: client/rust
+          key: ${{ matrix.name }}
+      - name: Build
+        if: matrix.name != 'macos'
+        working-directory: client/rust
+        run: cargo build --release --locked
+      - name: Build universal dylib
+        if: matrix.name == 'macos'
+        working-directory: client/rust
+        run: |
+          cargo build --release --locked --target aarch64-apple-darwin
+          cargo build --release --locked --target x86_64-apple-darwin
+          mkdir -p target/release
+          lipo -create -output target/release/${{ matrix.file }} \
+            target/aarch64-apple-darwin/release/${{ matrix.file }} \
+            target/x86_64-apple-darwin/release/${{ matrix.file }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lib-${{ matrix.name }}
+          path: client/rust/target/release/${{ matrix.file }}
+          if-no-files-found: error
+
+  client-export:
+    name: Client export
+    needs: [client-lib, server-test]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: lib-*
+          path: client/rust/target/release
+          merge-multiple: true
+      - name: Install Godot and export templates
+        run: |
+          base="https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable"
+          curl -fsSL -o godot.zip "$base/Godot_v${GODOT_VERSION}-stable_linux.x86_64.zip"
+          curl -fsSL -o templates.tpz "$base/Godot_v${GODOT_VERSION}-stable_export_templates.tpz"
+          unzip -q godot.zip && mv "Godot_v${GODOT_VERSION}-stable_linux.x86_64" /usr/local/bin/godot
+          dir="$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.stable"
+          mkdir -p "$dir" && unzip -q templates.tpz && mv templates/* "$dir/"
+      - name: Import project
+        run: godot --headless --path client/godot --import || true
+      - name: Export
+        run: |
+          mkdir -p build/linux build/windows build/macos dist
+          for preset in Linux Windows macOS; do
+            godot --headless --path client/godot --export-release "$preset"
+          done
+      - name: Package with content
+        run: |
+          version="${GITHUB_REF_NAME//\//-}"
+          for os in linux windows; do
+            cp -r content "build/$os/content"
+            (cd "build/$os" && zip -qr "../../dist/wildforge-client-$os-$version.zip" .)
+          done
+          # macOS: the client looks for content in Contents/Resources.
+          mkdir -p build/macos/app && unzip -q build/macos/wildforge.zip -d build/macos/app
+          app=$(find build/macos/app -maxdepth 1 -name '*.app' | head -1)
+          cp -r content "$app/Contents/Resources/content"
+          (cd build/macos/app && zip -qry "../../../dist/wildforge-client-macos-$version.zip" .)
+          ls -la dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wildforge-client
+          path: dist/*.zip
+          if-no-files-found: error
+
+  server-image:
+    name: Server Docker image
+    needs: server-test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/metadata-action@v5
+        id: meta
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/wildforge-server
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha
+      - uses: docker/login-action@v3
+        if: github.event_name != 'pull_request'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: server/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  release:
+    name: GitHub release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [client-export, server-image]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: wildforge-client
+          path: dist
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.zip
+          generate_release_notes: true
